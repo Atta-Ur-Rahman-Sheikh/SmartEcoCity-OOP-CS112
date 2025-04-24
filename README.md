@@ -3,4 +3,4 @@ Smart Eco City Simulation Platform – a C++ project for CS112 (Object Oriented 
 
 # Project Tasks
 
-![Uploading image.png…]()
+<img width="631" alt="Screenshot 2025-04-24 182651" src="https://github.com/user-attachments/assets/70cd911a-4281-4c19-bb4f-995a88d7445e" />
