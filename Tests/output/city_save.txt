@@ -1,4 +1,0 @@
-Energy=1200
-Water=82
-Pollution=34
-Population=1500

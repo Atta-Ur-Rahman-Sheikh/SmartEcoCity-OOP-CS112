@@ -307,11 +307,6 @@ void display_Map(tile map[map_height][map_width], tile previous_map[map_height][
     cout << "  " << RESET << "\n";
 }
 
-
-
-
-
-
 void copy_Map(tile arr1[map_height][map_width], tile arr2[map_height][map_width])
 {
     for (int i = 0; i < map_height; i++)
@@ -337,7 +332,7 @@ int main()
     display_Map(map, map);
     display_Map(map, previous_map);
 
-    
+
     // mouse.startListening(); // Blocking call
     return 0;
 }
