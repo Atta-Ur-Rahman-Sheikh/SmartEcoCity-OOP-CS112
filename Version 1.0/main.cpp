@@ -337,6 +337,7 @@ int main()
     display_Map(map, map);
     display_Map(map, previous_map);
 
+    
     // mouse.startListening(); // Blocking call
     return 0;
 }
