@@ -16,11 +16,11 @@ using namespace std;
 #define BOLD "\033[1m"
 #define REVERSE "\033[7m"
 
-// ANSI custom colour 
+// ANSI custom colour
 string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 
-// Map constants
+// Map dimensions
 static const int map_width = 42, map_height = 16, tileWidth = 2;
 int leftOffset = 12;
 struct tile
@@ -28,7 +28,7 @@ struct tile
     string texture, colour, type;
 };
 
-// UI layout (customizable)
+// UI layout
 int menuRow = map_height + 4, menuCol = leftOffset;
 int statsRow = map_height + 4, statsCol = map_width * tileWidth + 4;
 int tooltipRow = map_height + 8, tooltipCol = 0; // tooltip position will be set at runtime
@@ -189,6 +189,8 @@ int main()
     generate_Map(m);
     clear_Screen();
     display_Map(m);
+    
+    
     menus = {{"Build", {"Road", "House"}, {[]
                                            { draw_Message("Build Road"); }, []
                                            { draw_Message("Build House"); }}},

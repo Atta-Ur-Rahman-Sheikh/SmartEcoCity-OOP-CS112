@@ -55,29 +55,7 @@
 
 using namespace std;
 
-// Utility to build ANSI color codes
-string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
-string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
-
-// Map dimensions
-static const int map_width = 42;
-static const int map_height = 16;
-static const int tileWidth = 2;
-int leftOffset = 12;
-struct tile
-{
-    string texture, colour, type;
-};
-
-// UI layout variables
-int menuRow = map_height + 4;
-int menuCol = leftOffset + 1;
-int statsRow = map_height + 4;
-int statsCol = map_width * tileWidth + 4;
-int maxDropdownItems = 10; // computed after menus init
-int tooltipRow = 20;       // set after computing maxDropdownItems
-int messageRow = 7;       // row to display action messages
-
+// Prerequisite functions
 void emoji_Support()
 {
     SetConsoleOutputCP(CP_UTF8);
@@ -105,6 +83,29 @@ void clear_Screen()
     FillConsoleOutputAttribute(hConsole, csbi.wAttributes, consoleSize, coordScreen, &charsWritten);
     SetConsoleCursorPosition(hConsole, coordScreen);
 }
+
+// ANSI custom colour
+string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
+string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
+
+// Map dimensions
+static const int map_width = 42;
+static const int map_height = 16;
+static const int tileWidth = 2;
+int leftOffset = 11;
+struct tile
+{
+    string texture, colour, type;
+};
+
+// UI layout variables
+int menuRow = map_height + 4;
+int menuCol = leftOffset + 1;
+int statsRow = map_height + 4;
+int statsCol = map_width * tileWidth + 4;
+int maxDropdownItems = 10; // computed after menus init
+int tooltipRow = 2;       // set after computing maxDropdownItems
+int messageRow = 2;        // row to display action messages
 
 class MouseInputHandler
 {
@@ -215,9 +216,15 @@ void display_Map(tile map[map_height][map_width])
 {
     // Top border
     cout << "\033[1;1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-    for (int c = 0; c < map_width; c++)
-        cout << setw(tileWidth) << left << c + 1;
-    cout << RESET << "\n";
+    for (int c = 0, k = 1; c < map_width; c++, ++k)
+    {
+        cout << setw(tileWidth) << left << k;
+        if (k > 8)
+        {
+            k -= 9;
+        }
+    }
+    cout << "   " << RESET << "\n";
     // Rows
     for (int i = 0; i < map_height; i++)
     {
@@ -230,9 +237,15 @@ void display_Map(tile map[map_height][map_width])
     }
     // Bottom border
     cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-    for (int c = 0; c < map_width; c++)
-        cout << setw(tileWidth) << left << c + 1;
-    cout << RESET << "\n";
+    for (int c = 0, k = 1; c < map_width; c++, ++k)
+    {
+        cout << setw(tileWidth) << left << k;
+        if (k > 8)
+        {
+            k -= 9;
+        }
+    }
+    cout << "   " << RESET << "\n";
 }
 
 // Menu system
@@ -245,7 +258,6 @@ struct Menu
 vector<Menu> menus;
 int currentTab = 0, currentOpt = 0;
 vector<int> tabPositions;
-
 void rebuild_TabPositions()
 {
     tabPositions.clear();
@@ -256,7 +268,6 @@ void rebuild_TabPositions()
         x += int(m.name.size()) + 3;
     }
 }
-
 void compute_UI_positions()
 {
     maxDropdownItems = 0;
@@ -265,7 +276,6 @@ void compute_UI_positions()
     tooltipRow = menuRow + 1 + maxDropdownItems + 1;
     messageRow = tooltipRow - 1;
 }
-
 void clear_MenuArea()
 {
     int height = 1 + maxDropdownItems;
@@ -275,7 +285,6 @@ void clear_MenuArea()
         cout << "\033[" << r << ";" << menuCol << "H" << string(width, ' ');
     }
 }
-
 void draw_Menu()
 {
     clear_MenuArea();
@@ -297,7 +306,6 @@ void draw_Menu()
             cout << menus[currentTab].items[i];
     }
 }
-
 void draw_Stats()
 {
     cout << "\033[" << statsRow << ";" << statsCol << "H" << BOLD << "--- City Stats ---" << RESET;
@@ -305,19 +313,22 @@ void draw_Stats()
     cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" << "Funds: $5000";
     cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" << "Happiness: 75%";
 }
-
 void draw_Tooltip(const string &msg)
 {
-    int col = leftOffset + (map_width * tileWidth) / 2 - int(msg.size() / 2);
-    cout << "\033[" << tooltipRow << ";" << col << "H" << BOLD << msg << RESET;
-}
+    // At bottom center of the screen, customizable with variables row and col
+    int row, col;
+    row = tooltipRow + 7;
+    col = (map_width * tileWidth + leftOffset) / 2 - msg.size() / 2;
+    col += 12;
+    cout << "\033[" << row << ";" << col << "H" << string(80, ' ');
+    cout << "\033[" << row << ";" << col << "H" << msg;
 
+}
 void draw_Message(const string &msg)
 {
     cout << "\033[" << messageRow << ";" << menuCol << "H" << string(80, ' ');
     cout << "\033[" << messageRow << ";" << menuCol << "H" << msg;
 }
-
 void handle_Input()
 {
     while (true)
@@ -355,21 +366,60 @@ void handle_Input()
     }
 }
 
+class City
+{
+public:
+    static int money;
+    static int buildings;
+    static int population;
+    static int happiness;
+    static int carbon;
+    static int pollution;
+    static int complaints;
+    static int greenCoverage;
+    static int afforestation;
+    static int disasterRisk;
+    static int tourismRating;
+    static int mayorLevel;
+    static int ecoPoints;
+    static int AIknowledge;
+    static int year, month;
+
+    void displayStats(int state = 1)
+    {
+        if (state == 1)
+        {
+            // Money, time, Eco Points, AI Knowledge,buildings,Mayor Level,
+            
+        }
+        else if (state == 2)
+        {
+            // Carbon, Pollution, Green Coverage, Afforestation, Disaster Risk
+        }
+        else if (state == 3)
+        {
+            // Population, Happiness, Complaints, Tourism Rating,  
+        }
+    }
+};
+
 int main()
 {
+    // Prerequisites
     system(""); // For proper working of ANSI codes (Text Style and Colours)
     float sec = 2 * 1000;
-    cout << "Wait " << sec/1000 << " seconds for the map to load...\n";
-    Sleep(sec); // Time window for resizing CMD window
+    cout << "Wait " << sec / 1000 << " seconds for the map to load...\n";
+    Sleep(sec);      // Time window for resizing CMD window
     emoji_Support(); // For making Emojis work in CMD
     MouseInputHandler mouse;
-    srand(time(0));  // Seed for Random Island Generation
+    srand(time(0)); // Seed for Random Island Generation
 
     tile map[map_height][map_width];
     generate_Map(map);
     clear_Screen();
 
     display_Map(map);
+    City city;
 
     menus = {
         {"Build", {"Road", "House", "Park"}, {[]()
@@ -380,10 +430,8 @@ int main()
                                                           { draw_Message("Adjusting Taxes..."); }, []()
                                                           { draw_Message("Analyzing Population..."); }, []()
                                                           { draw_Message("Checking Resources..."); }}},
-        {"View", {"Zoom In", "Zoom Out"}, {[]()
-                                           { draw_Message("Zooming In..."); }, []()
-                                           { draw_Message("Zooming Out..."); }}},
-        {"Settings", {"Save", "Load", "Exit"}, {[]()
+        {"STATS", {"Economy", "Environment", "Population"}, {[](){ draw_Message("Zooming In..."); }, [](){ City city; city.displayStats(1); }, [](){ draw_Message("Zooming Out..."); }}},
+        {"SETTINGS", {"Save", "Load", "Exit"}, {[]()
                                                 { draw_Message("Saving Game..."); }, []()
                                                 { draw_Message("Loading Game..."); }, []()
                                                 { exit(0); }}}};
@@ -393,8 +441,7 @@ int main()
 
     draw_Menu();
     draw_Stats();
-    draw_Tooltip("←/→ change tab, ↑/↓ select, Enter action, Esc exit");
+    draw_Tooltip("Tooltip: ←/→ change tab, ↑/↓ select, Enter action, Esc exit");
     handle_Input();
-
     return 0;
 }
