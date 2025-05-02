@@ -1,206 +1,250 @@
 #include <iostream>
 #include <string>
+#include <vector>
+#include <functional>
+#include <memory>
+#include <cmath>
+#include <ctime>
 #include <windows.h>
 #include <conio.h>
 #include <iomanip>
-#include <cmath>
-#include <cstdlib>
-#include <ctime>
-#include <vector>
-#include <functional>
-#include <algorithm>
 
 using namespace std;
 
-#define RESET "\033[0m"
-#define BOLD "\033[1m"
-#define REVERSE "\033[7m"
-
-// ANSI custom colour
-string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
-string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
+// Forward declarations
+class Building;
+class TimeManager;
+class City;
 
 // Map dimensions
-static const int map_width = 42, map_height = 16, tileWidth = 2;
-int leftOffset = 12;
-struct tile
+typedef int TileID;
+static const int MAP_WIDTH = 42;
+static const int MAP_HEIGHT = 16;
+
+// Enum for building types
+enum class BuildingType
 {
-    string texture, colour, type;
+    None,
+    Road,
+    Residential,
+    Commercial,
+    Industrial,
+    Hospital,
+    School,
+    Park,
+    Tree,
+    SolarPlant,
+    WindTurbine,
+    Airport
 };
 
-// UI layout
-int menuRow = map_height + 4, menuCol = leftOffset;
-int statsRow = map_height + 4, statsCol = map_width * tileWidth + 4;
-int tooltipRow = map_height + 8, tooltipCol = 0; // tooltip position will be set at runtime
-int messageRow = tooltipRow - 1;
+// Stats structure
+typedef struct
+{
+    int cost;
+    int maintenance;
+    int popEffect;
+    int happiness;
+    int pollution;
+    int green;
+    int ecoPoints;
+    int energy;
+} Stats;
 
-void clear_Screen()
+// Base Building class
+class Building
 {
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    COORD c = {0, 0};
-    DWORD w;
-    CONSOLE_SCREEN_BUFFER_INFO b;
-    GetConsoleScreenBufferInfo(h, &b);
-    DWORD sz = b.dwSize.X * b.dwSize.Y;
-    FillConsoleOutputCharacter(h, ' ', sz, c, &w);
-    FillConsoleOutputAttribute(h, b.wAttributes, sz, c, &w);
-    SetConsoleCursorPosition(h, c);
-}
-void emoji_Support()
-{
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_FONT_INFOEX f;
-    f.cbSize = sizeof(f);
-    GetCurrentConsoleFontEx(h, FALSE, &f);
-    f.dwFontSize.Y = 24;
-    f.FontFamily = FF_DONTCARE;
-    f.FontWeight = FW_NORMAL;
-    wcscpy_s(f.FaceName, L"Consolas");
-    SetCurrentConsoleFontEx(h, FALSE, &f);
-}
+public:
+    BuildingType type;
+    Stats stats;
+    wchar_t icon;
+    bool removable;
 
-void generate_Map(tile m[map_height][map_width])
-{
-    int cx = map_width / 2, cy = map_height / 2, r = 16;
-    float sx = 1, sy = 2.5;
-    for (int i = 0; i < map_height; i++)
-        for (int j = 0; j < map_width; j++)
-        {
-            float d = sqrt(pow((j - cx) * sx, 2) + pow((i - cy) * sy, 2));
-            bool w = (d + (rand() % 3 - 1) > r);
-            if (w)
-            {
-                m[i][j].colour = custom_Background(117, 226, 254) + custom_Colour(93, 181, 203);
-                m[i][j].texture = (rand() % 100 < 30 ? "~ " : "  ");
-                m[i][j].type = "Water";
-            }
-            else
-            {
-                m[i][j].colour = custom_Background(131, 198, 105) + custom_Colour(80, 130, 60);
-                m[i][j].texture = (rand() % 100 < 20 ? "^^" : "  ");
-                m[i][j].type = "Land";
-            }
-        }
-}
-void display_Map(tile m[map_height][map_width])
-{
-    cout << "\033[1;1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-    for (int c = 0; c < map_width; c++)
-        cout << setw(tileWidth) << left << c + 1;
-    cout << RESET << "\n";
-    for (int i = 0; i < map_height; i++)
-    {
-        cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << " " << char('A' + i) << " " << RESET;
-        for (int j = 0; j < map_width; j++)
-            cout << m[i][j].colour << m[i][j].texture << RESET;
-        cout << BOLD << custom_Background(32, 32, 32) << " " << char('A' + i) << " " << RESET << "\n";
-    }
-    cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-    for (int c = 0; c < map_width; c++)
-        cout << setw(tileWidth) << left << c + 1;
-    cout << RESET << "\n";
-}
+    Building(BuildingType t, const Stats &s, wchar_t ic, bool rem = true)
+        : type(t), stats(s), icon(ic), removable(rem) {}
 
-// Menu definitions
-struct Menu
-{
-    string name;
-    vector<string> items;
-    vector<function<void()>> act;
+    virtual ~Building() {}
 };
-vector<Menu> menus;
-int currentTab = 0, currentOpt = 0;
-vector<int> tabPos;
-void rebuild_Tab()
+
+// Concrete buildings
+class Road : public Building
 {
-    tabPos.clear();
-    int x = menuCol;
-    for (auto &M : menus)
+public:
+    Road() : Building(BuildingType::Road, {10, 1, 0, 0, 1, 0, 0, 0}, L'═') {}
+};
+
+class Residential : public Building
+{
+public:
+    Residential() : Building(BuildingType::Residential, {100, 5, 4, 2, 1, 0, 0, 0}, L'🏠') {}
+};
+
+class Commercial : public Building
+{
+public:
+    Commercial() : Building(BuildingType::Commercial, {150, 10, 2, 3, 2, 0, 0, 0}, L'🏢') {}
+};
+
+class Industrial : public Building
+{
+public:
+    Industrial() : Building(BuildingType::Industrial, {200, 15, 1, -2, 5, 0, 0, 0}, L'🏭') {}
+};
+
+class Park : public Building
+{
+public:
+    Park() : Building(BuildingType::Park, {50, 2, 0, 5, -1, 5, 1, 0}, L'🌳') {}
+};
+
+class Tree : public Building
+{
+public:
+    Tree() : Building(BuildingType::Tree, {10, 0, 0, 1, -1, 3, 1, 0}, L'🌲') {}
+};
+
+class Hospital : public Building
+{
+public:
+    Hospital() : Building(BuildingType::Hospital, {300, 20, 0, 4, 0, 0, 2, 0}, L'🏥') {}
+};
+
+class School : public Building
+{
+public:
+    School() : Building(BuildingType::School, {250, 15, 0, 3, 0, 0, 2, 0}, L'🏫') {}
+};
+
+class SolarPlant : public Building
+{
+public:
+    SolarPlant() : Building(BuildingType::SolarPlant, {400, 5, 0, 0, 0, 0, 3, 5}, L'🔆') {}
+};
+
+class WindTurbine : public Building
+{
+public:
+    WindTurbine() : Building(BuildingType::WindTurbine, {500, 5, 0, 0, 0, 0, 3, 8}, L'🌬️') {}
+};
+
+class Airport : public Building
+{
+public:
+    Airport() : Building(BuildingType::Airport, {0, 0, 0, 0, 0, 0, 0, 0}, L'✈️', false) {}
+};
+
+// Tile struct to hold building and terrain
+struct Tile
+{
+    bool isLand;
+    unique_ptr<Building> building;
+    bool highlight;
+};
+
+// Game Map
+typedef Tile Map[MAP_HEIGHT][MAP_WIDTH];
+
+// Utility functions to check placement
+bool canPlace(const Map &map, int r, int c, BuildingType type);
+
+// Time Manager for months
+class TimeManager
+{
+public:
+    int monthLengthSec;
+    int currentMonth;
+    int currentYear;
+    time_t lastTick;
+    function<void()> onMonthChange;
+
+    TimeManager(int secs) : monthLengthSec(secs), currentMonth(1), currentYear(2025)
     {
-        tabPos.push_back(x);
-        x += M.name.size() + 3;
+        lastTick = time(nullptr);
     }
-}
-void clear_MenuArea()
-{
-    int h = 1;
-    for (int r = menuRow; r < menuRow + h; r++)
+    void update()
     {
-        cout << "\033[" << r << ";" << menuCol << "H" << string(tabPos.back() + menus.back().name.size() + 2 - menuCol, ' ');
-    }
-}
-void draw_Menu()
-{
-    clear_MenuArea();
-    for (int t = 0; t < menus.size(); t++)
-    {
-        cout << "\033[" << menuRow << ";" << tabPos[t] << "H" << (t == currentTab ? REVERSE : "[" + menus[t].name + "]");
-    }
-    for (int i = 0; i < menus[currentTab].items.size(); i++)
-    {
-        cout << "\033[" << (menuRow + 1 + i) << ";" << tabPos[currentTab] << "H" << (i == currentOpt ? REVERSE : "") << menus[currentTab].items[i] << RESET;
-    }
-}
-void draw_Stats() { cout << "\033[" << statsRow << ";" << statsCol << "H" << BOLD << "---Stats---" << RESET; }
-void draw_Tooltip(const string &m)
-{
-    if (tooltipCol == 0)
-        tooltipCol = leftOffset + (map_width * tileWidth) / 2 - m.size() / 2;
-    cout << "\033[" << tooltipRow << ";" << tooltipCol << "H" << BOLD << m << RESET;
-}
-void draw_Message(const string &m) { cout << "\033[" << messageRow << ";" << menuCol << "H" << string(80, ' ') << "\033[" << messageRow << ";" << menuCol << "H" << m; }
-void input()
-{
-    while (true)
-    {
-        int ch = _getch();
-        if (ch == 224)
+        time_t now = time(nullptr);
+        if (difftime(now, lastTick) >= monthLengthSec)
         {
-            int d = _getch();
-            if (d == 75)
-                currentTab = (currentTab - 1 + menus.size()) % menus.size(), currentOpt = 0;
-            if (d == 77)
-                currentTab = (currentTab + 1) % menus.size(), currentOpt = 0;
-            if (d == 80)
-                currentOpt = (currentOpt + 1) % menus[currentTab].items.size();
-            if (d == 72)
-                currentOpt = (currentOpt - 1 + menus[currentTab].items.size()) % menus[currentTab].items.size();
+            lastTick = now;
+            currentMonth++;
+            if (currentMonth > 12)
+            {
+                currentMonth = 1;
+                currentYear++;
+            }
+            if (onMonthChange)
+                onMonthChange();
         }
-        else if (ch == 13)
-        {
-            menus[currentTab].act[currentOpt]();
-        }
-        else if (ch == 27)
-            break;
-        draw_Menu();
-        draw_Stats();
-        draw_Tooltip("←/→tab ↑/↓opt Enter act Esc exit");
     }
-}
+};
+
+// City stats structure
+struct CityStats
+{
+    int cash = 10000;
+    int population = 100;
+    int ecoPoints = 0;
+    int pollution = 0;
+    int greenLevel = 0;
+    int energy = 0;
+};
+
+// Main Game class
+class City
+{
+public:
+    Map grid;
+    CityStats stats;
+    TimeManager timer;
+
+    City(int monthSec = 5)
+        : timer(monthSec)
+    {
+        // Initialize map
+        for (int i = 0; i < MAP_HEIGHT; i++)
+            for (int j = 0; j < MAP_WIDTH; j++)
+            {
+                grid[i][j].isLand = true; // placeholder: call existing generate_Map
+                grid[i][j].highlight = false;
+            }
+        // Place central airport
+        int cx = MAP_HEIGHT / 2, cy = MAP_WIDTH / 2;
+        grid[cx][cy].building = make_unique<Airport>();
+        timer.onMonthChange = [&]()
+        { this->tickMonth(); };
+    }
+    void tickMonth()
+    {
+        // Update economy, population, eco points, pollution...
+    }
+    void placeBuilding(int row, int col, BuildingType type)
+    {
+        if (canPlace(grid, row, col, type))
+        {
+            switch (type)
+            {
+            case BuildingType::Road:
+                grid[row][col].building = make_unique<Road>();
+                break;
+            case BuildingType::Residential:
+                grid[row][col].building = make_unique<Residential>();
+                break;
+                // ... other cases
+            }
+        }
+    }
+    void removeBuilding(int row, int col)
+    {
+        if (grid[row][col].building && grid[row][col].building->removable)
+            grid[row][col].building.reset();
+    }
+};
+
+// Entry point
 int main()
 {
-    Sleep(2000);
-    srand(time(NULL));
-    system("");
-    emoji_Support();
-    tile m[map_height][map_width];
-    generate_Map(m);
-    clear_Screen();
-    display_Map(m);
-    
-    
-    menus = {{"Build", {"Road", "House"}, {[]
-                                           { draw_Message("Build Road"); }, []
-                                           { draw_Message("Build House"); }}},
-             {"View", {"Zoom", "Reset"}, {[]
-                                          { draw_Message("Zoom"); }, []
-                                          { draw_Message("Reset"); }}}};
-    rebuild_Tab();
-    draw_Menu();
-    draw_Stats();
-    draw_Tooltip("←/→tab ↑/↓opt Enter act Esc exit");
-    input();
+    City city(10); // each month = 10 seconds
+    // Setup UI, mouse handlers, menu actions: call city.placeBuilding, city.removeBuilding, etc.
     return 0;
 }
