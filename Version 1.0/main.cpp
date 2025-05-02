@@ -407,7 +407,7 @@ int main()
 {
     // Prerequisites
     system(""); // For proper working of ANSI codes (Text Style and Colours)
-    float sec = 2 * 1000;
+    float sec = 3 * 1000;
     cout << "Wait " << sec / 1000 << " seconds for the map to load...\n";
     Sleep(sec);      // Time window for resizing CMD window
     emoji_Support(); // For making Emojis work in CMD
@@ -431,9 +431,9 @@ int main()
                                                           { draw_Message("Analyzing Population..."); }, []()
                                                           { draw_Message("Checking Resources..."); }}},
         {"STATS", {"Economy", "Environment", "Population"}, {[](){ draw_Message("Zooming In..."); }, [](){ City city; city.displayStats(1); }, [](){ draw_Message("Zooming Out..."); }}},
-        {"SETTINGS", {"Save", "Load", "Exit"}, {[]()
-                                                { draw_Message("Saving Game..."); }, []()
-                                                { draw_Message("Loading Game..."); }, []()
+        {"SETTINGS", {"placeholder", "placeholder", "Exit"}, {[]()
+                                                { draw_Message("placeholder"); }, []()
+                                                { draw_Message("placeholder"); }, []()
                                                 { exit(0); }}}};
 
     rebuild_TabPositions();
