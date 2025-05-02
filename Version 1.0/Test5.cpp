@@ -922,3 +922,81 @@ void draw_Menu()
             cout << menus[currentTab].items[i];
     }
 }
+
+int main()
+{
+    cin.get(); 
+    // --- 1) Console setup --------------------------------
+    emoji_Support();           // UTF-8 + emoji support (Test5.cpp)  
+    clear_Screen();            // blank out console buffer  
+
+    // --- 2) Create city and global pointer -------------
+    City city;                 // your City class instance  
+    cityPtr = &city;           // used by menu lambdas and actions  
+
+    // --- 3) Menu setup (customizable!) -----------------
+    menus = {
+        { "Build", 
+          { "Road","House","Office","Factory","Hospital","School","Park","Tree","Solar","Wind" },
+          {
+            [](){ cityPtr->currentTool = BuildingType::Road; },
+            [](){ cityPtr->currentTool = BuildingType::Residential; },
+            [](){ cityPtr->currentTool = BuildingType::Commercial; },
+            [](){ cityPtr->currentTool = BuildingType::Industrial; },
+            [](){ cityPtr->currentTool = BuildingType::Hospital; },
+            [](){ cityPtr->currentTool = BuildingType::School; },
+            [](){ cityPtr->currentTool = BuildingType::Park; },
+            [](){ cityPtr->currentTool = BuildingType::Tree; },
+            [](){ cityPtr->currentTool = BuildingType::SolarPlant; },
+            [](){ cityPtr->currentTool = BuildingType::WindTurbine; }
+          }
+        },
+        { "Stats",
+          { "General","Environment","Population" },
+          {
+            [](){ cityPtr->statsDisplayMode = 1; },
+            [](){ cityPtr->statsDisplayMode = 2; },
+            [](){ cityPtr->statsDisplayMode = 3; }
+          }
+        }
+    };
+    rebuild_TabPositions();     // calculate tab X‑positions  
+    compute_UI_positions();     // compute tooltip/message rows  
+
+    // --- 4) Initial draw --------------------------------
+    draw_Menu();               // top menu + dropdown (Test5.cpp)  
+    city.display_Map();        // map grid with any buildings  
+    city.draw_Stats();         // stats panel  
+
+    draw_Message("Welcome! Click to select/place.");  
+
+    // --- 5) Mouse callbacks --------------------------------
+    MouseInputHandler mouse;    // handles console mouse events  
+
+    mouse.setLeftClickCallback([](int x,int y){
+        int r,c;
+        if(mapCoordinatesFromConsole(x,y,r,c)){
+            cityPtr->setSelection(r,c);               // highlight & message  
+            if(cityPtr->currentTool!=BuildingType::None){
+                cityPtr->placeBuilding(r,c,cityPtr->currentTool);
+                cityPtr->draw_Stats();               // update stats after build
+            }
+            cityPtr->display_Map();                  // refresh map view
+        }
+    });
+
+    mouse.setMoveCallback([](int x,int y){
+        int r,c;
+        if(mapCoordinatesFromConsole(x,y,r,c)){
+            cityPtr->setSelection(r,c);               // hover highlight
+        }
+    });
+
+    // --- 6) Enter event loop ------------------------------
+    mouse.startListening();      // blocks, processing mouse events  
+
+    return 0;
+}
+
+
+
