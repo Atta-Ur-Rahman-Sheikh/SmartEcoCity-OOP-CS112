@@ -869,7 +869,7 @@ void draw_Tooltip(const string &msg)
 {
     // At bottom center of the screen, customizable with variables row and col
     int row, col;
-    row = tooltipRow + 7;
+    row = tooltipRow + 6;
     col = (map_width * tileWidth + leftOffset) / 2 - msg.size() / 2;
     col += 12;
     cout << "\033[" << row << ";" << col << "H" << string(80, ' ');
@@ -925,78 +925,292 @@ void draw_Menu()
 
 int main()
 {
-    cin.get(); 
-    // --- 1) Console setup --------------------------------
-    emoji_Support();           // UTF-8 + emoji support (Test5.cpp)  
-    clear_Screen();            // blank out console buffer  
-
-    // --- 2) Create city and global pointer -------------
-    City city;                 // your City class instance  
-    cityPtr = &city;           // used by menu lambdas and actions  
-
-    // --- 3) Menu setup (customizable!) -----------------
+    // --- 1) Console and setup options ---------------------------
+    bool runGame = true;
+    int monthLengthSeconds = 10;   // Customizable month length
+    int startingMoney = 10000;     // Customizable starting money
+    int startingPopulation = 100;  // Customizable starting population
+    
+    cout << BOLD << CYAN << "\n\n  ╔═══════════════════════════════════════════╗" << endl;
+    cout << "  ║   ECO-CITY BUILDER v1.0              ║" << endl;
+    cout << "  ╚═══════════════════════════════════════════╝" << RESET << endl;
+    cout << "\n  " << ITALIC << "Build a sustainable city and manage resources" << RESET << endl;
+    cout << "\n  Press Enter to start the game...";
+    cin.get();
+    
+    // --- 2) Console setup --------------------------------
+    emoji_Support();           // UTF-8 + emoji support
+    clear_Screen();            // blank out console buffer
+    
+    // --- 3) Create city and global pointer --------------
+    City city(monthLengthSeconds);  // Customizable month length
+    city.money = startingMoney;
+    city.population = startingPopulation;
+    cityPtr = &city;           // used by menu lambdas and actions
+    
+    // --- 4) Menu setup (customizable!) -----------------
     menus = {
         { "Build", 
           { "Road","House","Office","Factory","Hospital","School","Park","Tree","Solar","Wind" },
           {
-            [](){ cityPtr->currentTool = BuildingType::Road; },
-            [](){ cityPtr->currentTool = BuildingType::Residential; },
-            [](){ cityPtr->currentTool = BuildingType::Commercial; },
-            [](){ cityPtr->currentTool = BuildingType::Industrial; },
-            [](){ cityPtr->currentTool = BuildingType::Hospital; },
-            [](){ cityPtr->currentTool = BuildingType::School; },
-            [](){ cityPtr->currentTool = BuildingType::Park; },
-            [](){ cityPtr->currentTool = BuildingType::Tree; },
-            [](){ cityPtr->currentTool = BuildingType::SolarPlant; },
-            [](){ cityPtr->currentTool = BuildingType::WindTurbine; }
+            [](){ cityPtr->currentTool = BuildingType::Road; draw_Message("Selected Road tool - costs $10"); },
+            [](){ cityPtr->currentTool = BuildingType::Residential; draw_Message("Selected House tool - costs $100"); },
+            [](){ cityPtr->currentTool = BuildingType::Commercial; draw_Message("Selected Office tool - costs $150"); },
+            [](){ cityPtr->currentTool = BuildingType::Industrial; draw_Message("Selected Factory tool - costs $200"); },
+            [](){ cityPtr->currentTool = BuildingType::Hospital; draw_Message("Selected Hospital tool - costs $300"); },
+            [](){ cityPtr->currentTool = BuildingType::School; draw_Message("Selected School tool - costs $250"); },
+            [](){ cityPtr->currentTool = BuildingType::Park; draw_Message("Selected Park tool - costs $50"); },
+            [](){ cityPtr->currentTool = BuildingType::Tree; draw_Message("Selected Tree tool - costs $10"); },
+            [](){ cityPtr->currentTool = BuildingType::SolarPlant; draw_Message("Selected Solar Plant tool - costs $400"); },
+            [](){ cityPtr->currentTool = BuildingType::WindTurbine; draw_Message("Selected Wind Turbine tool - costs $500"); }
           }
         },
         { "Stats",
           { "General","Environment","Population" },
           {
-            [](){ cityPtr->statsDisplayMode = 1; },
-            [](){ cityPtr->statsDisplayMode = 2; },
-            [](){ cityPtr->statsDisplayMode = 3; }
+            [](){ cityPtr->statsDisplayMode = 1; cityPtr->draw_Stats(); draw_Message("Viewing General Stats"); },
+            [](){ cityPtr->statsDisplayMode = 2; cityPtr->draw_Stats(); draw_Message("Viewing Environment Stats"); },
+            [](){ cityPtr->statsDisplayMode = 3; cityPtr->draw_Stats(); draw_Message("Viewing Population Stats"); }
+          }
+        },
+        { "Tools",
+          { "Demolish", "Info", "None" },
+          {
+            [](){ 
+                cityPtr->currentTool = BuildingType::None;
+                draw_Message("Demolish tool selected - Right-click to remove buildings"); 
+            },
+            [](){ 
+                cityPtr->currentTool = BuildingType::None;
+                draw_Message("Info tool selected - Click to see building details"); 
+            },
+            [](){ 
+                cityPtr->currentTool = BuildingType::None;
+                draw_Message("No tool selected"); 
+            }
+          }
+        },
+        { "Game",
+          { "Save Game", "Load Game", "New Game", "Exit" },
+          {
+            [](){ draw_Message("Game saved! (Demo only)"); },
+            [](){ draw_Message("Game loaded! (Demo only)"); },
+            [](){ 
+                cityPtr->generate_Map();
+                cityPtr->money = 10000;
+                cityPtr->population = 100;
+                cityPtr->happiness = 75;
+                cityPtr->ecoPoints = 0;
+                cityPtr->pollution = 0;
+                cityPtr->greenLevel = 0;
+                cityPtr->energy = 0;
+                cityPtr->maintenance = 0;
+                cityPtr->currentTool = BuildingType::None;
+                cityPtr->totalBuildings = 0;
+                cityPtr->display_Map();
+                cityPtr->draw_Stats();
+                draw_Message("New game started!");
+            },
+            [](){ exit(0); }
           }
         }
     };
-    rebuild_TabPositions();     // calculate tab X‑positions  
-    compute_UI_positions();     // compute tooltip/message rows  
-
-    // --- 4) Initial draw --------------------------------
-    draw_Menu();               // top menu + dropdown (Test5.cpp)  
-    city.display_Map();        // map grid with any buildings  
-    city.draw_Stats();         // stats panel  
-
-    draw_Message("Welcome! Click to select/place.");  
-
-    // --- 5) Mouse callbacks --------------------------------
-    MouseInputHandler mouse;    // handles console mouse events  
-
-    mouse.setLeftClickCallback([](int x,int y){
-        int r,c;
-        if(mapCoordinatesFromConsole(x,y,r,c)){
-            cityPtr->setSelection(r,c);               // highlight & message  
-            if(cityPtr->currentTool!=BuildingType::None){
-                cityPtr->placeBuilding(r,c,cityPtr->currentTool);
-                cityPtr->draw_Stats();               // update stats after build
+    rebuild_TabPositions();    // calculate tab X-positions
+    compute_UI_positions();    // compute tooltip/message rows
+    
+    // --- 5) Initial draw --------------------------------
+    draw_Menu();               // top menu + dropdown
+    city.display_Map();        // map grid with any buildings
+    city.draw_Stats();         // stats panel
+    
+    draw_Message("Welcome to Eco-City Builder! Click to select/place.");
+    draw_Tooltip("Use arrow keys to navigate menus. Press Enter to select an option.");
+    
+    // --- 6) Mouse callbacks --------------------------------
+    MouseInputHandler mouse;   // handles console mouse events
+    
+    // Mouse handlers
+    int lastHighlightRow = -1, lastHighlightCol = -1;
+    
+    // Left click handler
+    mouse.setLeftClickCallback([](int x, int y){
+        // Handle menu clicks
+        if (y == menuRow) {
+            for (int i = 0; i < int(menus.size()); i++) {
+                if (x >= tabPositions[i] && x < tabPositions[i] + int(menus[i].name.size()) + 2) {
+                    currentTab = i;
+                    currentOpt = 0;
+                    draw_Menu();
+                    return;
+                }
             }
-            cityPtr->display_Map();                  // refresh map view
+        } else if (y >= menuRow + 1 && y < menuRow + 1 + int(menus[currentTab].items.size())) {
+            int opt = y - (menuRow + 1);
+            if (opt >= 0 && opt < int(menus[currentTab].items.size())) {
+                currentOpt = opt;
+                menus[currentTab].actions[opt]();
+                draw_Menu();
+                return;
+            }
+        }
+        
+        // Handle map clicks
+        int r, c;
+        if (mapCoordinatesFromConsole(x, y, r, c)) {
+            cityPtr->setSelection(r, c);  // Highlight & message
+            if (cityPtr->currentTool != BuildingType::None) {
+                if (cityPtr->placeBuilding(r, c, cityPtr->currentTool)) {
+                    draw_Message("Building placed successfully!");
+                }
+                cityPtr->display_Map();    // Refresh map view
+            }
         }
     });
-
-    mouse.setMoveCallback([](int x,int y){
-        int r,c;
-        if(mapCoordinatesFromConsole(x,y,r,c)){
-            cityPtr->setSelection(r,c);               // hover highlight
+    
+    // Right click handler
+    mouse.setRightClickCallback([](int x, int y){
+        int r, c;
+        if (mapCoordinatesFromConsole(x, y, r, c)) {
+            if (cityPtr->removeBuilding(r, c)) {
+                draw_Message("Building demolished!");
+                cityPtr->display_Map();    // Refresh map view
+            } else {
+                draw_Message("Can't remove that!");
+            }
         }
     });
-
-    // --- 6) Enter event loop ------------------------------
-    mouse.startListening();      // blocks, processing mouse events  
-
+    
+    // Mouse move handler with anti-flicker logic
+    mouse.setMoveCallback([&lastHighlightRow, &lastHighlightCol](int x, int y){
+        int r, c;
+        if (mapCoordinatesFromConsole(x, y, r, c)) {
+            // Only update if position changed
+            if (r != lastHighlightRow || c != lastHighlightCol) {
+                lastHighlightRow = r;
+                lastHighlightCol = c;
+                
+                cityPtr->clearHighlights();
+                cityPtr->map[r][c].highlight = true;
+                cityPtr->display_Map();
+                
+                // Show building costs/info in tooltip
+                string tooltip = "";
+                switch (cityPtr->currentTool) {
+                    case BuildingType::Road:
+                        tooltip = "Road: $10 - Connects buildings";
+                        break;
+                    case BuildingType::Residential:
+                        tooltip = "House: $100 - Increases population";
+                        break;
+                    case BuildingType::Commercial:
+                        tooltip = "Office: $150 - Creates jobs and income";
+                        break;
+                    case BuildingType::Industrial:
+                        tooltip = "Factory: $200 - More jobs but creates pollution";
+                        break;
+                    case BuildingType::Hospital:
+                        tooltip = "Hospital: $300 - Improves happiness";
+                        break;
+                    case BuildingType::School:
+                        tooltip = "School: $250 - Improves happiness and eco points";
+                        break;
+                    case BuildingType::Park:
+                        tooltip = "Park: $50 - Improves happiness and reduces pollution";
+                        break;
+                    case BuildingType::Tree:
+                        tooltip = "Tree: $10 - Natural beauty, reduces pollution";
+                        break;
+                    case BuildingType::SolarPlant:
+                        tooltip = "Solar Plant: $400 - Clean energy source";
+                        break;
+                    case BuildingType::WindTurbine:
+                        tooltip = "Wind Turbine: $500 - Efficient clean energy";
+                        break;
+                    default:
+                        if (cityPtr->map[r][c].building) {
+                            BuildingType type = cityPtr->map[r][c].building->type;
+                            tooltip = "Building at " + string(1, 'A' + r) + to_string(c + 1);
+                            tooltip += " - Right-click to demolish";
+                        } else {
+                            tooltip = "Empty " + cityPtr->map[r][c].type + " at " + string(1, 'A' + r) + to_string(c + 1);
+                        }
+                        break;
+                }
+                draw_Tooltip(tooltip);
+            }
+        }
+    });
+    
+    // --- 7) Game update thread ----------------------------
+    std::thread updateThread([&city, &runGame]() {
+        while (runGame) {
+            city.timer.update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+    updateThread.detach();  // Let it run independently
+    
+    // --- 8) Start keyboard handling function --------------
+    std::thread keyboardThread([&runGame]() {
+        while (runGame) {
+            if (_kbhit()) {
+                int key = _getch();
+                
+                if (key == 27) { // ESC key
+                    runGame = false;
+                    exit(0);
+                }
+                else if (key == 13) { // Enter key
+                    if (currentTab >= 0 && currentTab < int(menus.size()) &&
+                        currentOpt >= 0 && currentOpt < int(menus[currentTab].actions.size())) {
+                        menus[currentTab].actions[currentOpt]();
+                        draw_Menu();
+                    }
+                }
+                else if (key >= '1' && key <= '3') { // Number keys for stats views
+                    cityPtr->statsDisplayMode = key - '0';
+                    cityPtr->draw_Stats();
+                    draw_Message("Changed stats view to " + to_string(cityPtr->statsDisplayMode));
+                }
+                else if (key == 224) { // Special keys prefix
+                    key = _getch();
+                    switch (key) {
+                        case 72: // Up arrow
+                            if (currentOpt > 0) {
+                                currentOpt--;
+                                draw_Menu();
+                            }
+                            break;
+                        case 80: // Down arrow
+                            if (currentOpt < int(menus[currentTab].items.size()) - 1) {
+                                currentOpt++;
+                                draw_Menu();
+                            }
+                            break;
+                        case 75: // Left arrow
+                            if (currentTab > 0) {
+                                currentTab--;
+                                currentOpt = 0;
+                                draw_Menu();
+                            }
+                            break;
+                        case 77: // Right arrow
+                            if (currentTab < int(menus.size()) - 1) {
+                                currentTab++;
+                                currentOpt = 0;
+                                draw_Menu();
+                            }
+                            break;
+                    }
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    });
+    keyboardThread.detach();  // Let it run independently
+    
+    // --- 9) Enter main event loop --------------------------
+    mouse.startListening();  // Blocks, processing mouse events
+    
     return 0;
 }
-
-
-
