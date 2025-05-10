@@ -52,17 +52,40 @@
 #include <vector>
 #include <functional>
 #include <algorithm> // for std::max
-#include <memory>    // for unique_ptr
 #include <thread>    // for std::thread
 #include <fstream>   // for file operations
 #include <sstream>   // for string stream
+#include <memory>    // for std::unique_ptr
 
 using namespace std;
 
-// Forward declarations
+// Forward class declarations
+class City;
+class Building;
+struct Tile;
+struct Menu;
+
+// Forward function declarations
 void draw_Message(const std::string &msg);
 void save_Config(const string &filename);
 bool load_Config(const string &filename);
+void compute_UI_positions();
+void setup_Menus();
+void rebuild_TabPositions();
+void draw_Menu();
+bool handle_Menu_Click(int x, int y);
+void handle_Menu_Hover(int x, int y);
+void game_Loop();
+void emoji_Support(bool reconfigure = false);
+void handle_Mouse_Input(int x, int y, bool isClick);
+void play_Sound(int soundType);
+void clear_Screen();
+void hide_Cursor();
+void show_Cursor();
+void setup_Terminal();
+void reset_Terminal();
+void init_Game();
+void cleanup_Game();
 
 // Global Configuration Structure
 struct GameConfig
@@ -81,14 +104,72 @@ struct GameConfig
     string fontName = "Consolas"; // Console font name
 } config;
 
-// Initialize config with globals for now
-int leftOffset = config.leftOffset;
-int map_width = config.mapWidth;
-int map_height = config.mapHeight;
-int tileWidth = config.tileWidth;
+// Global variables
+int statsRow = 2;      // Row position for stats display
+int statsCol = 60;     // Column position for stats display
+int logRow = 20;       // Row position for log display
+int logCol = 11;       // Column position for log display
+int tooltipRow = 24;   // Row position for tooltip display
+int messageRow = 25;   // Row for action messages
+int menuRow = 1;       // Row for menu tabs
+int menuCol = 10;      // Column for menu start
+int maxDropdownItems = 10; // Max dropdown items to display
+
+// These variables will be initialized from config in init_Game()
+int leftOffset;
+int map_width;
+int map_height;
+int tileWidth;
+
+// Enum for building types
+enum class BuildingType
+{
+    None,
+    Road,
+    Residential,
+    Commercial,
+    Industrial,
+    Hospital,
+    School,
+    Park,
+    Tree,
+    SolarPlant,
+    WindTurbine,
+    Airport,
+    WaterTreatment,
+    RecyclingCenter,
+    FireStation,
+    PoliceStation
+};
+
+// Menu structures
+struct MenuItem {
+    int x, y;           // Position
+    int width;          // Display width
+    string label;       // Display label
+    string tooltip;     // Tooltip text
+    BuildingType toolType; // Associated building tool
+    function<void()> action; // Custom action callback
+
+    MenuItem(int _x, int _y, string _label, string _tooltip, BuildingType _type = BuildingType::None, function<void()> _action = nullptr)
+        : x(_x), y(_y), width(_label.length()), label(_label), tooltip(_tooltip), toolType(_type), action(_action) {}
+};
+
+struct Menu {
+    string name;
+    vector<MenuItem> items;
+
+    Menu(string _name) : name(_name) {}
+};
+
+// Global menus container
+vector<Menu> menus;
+
+// Global city instance
+City *city; // Declaration of the global city pointer
 
 // Prerequisite functions
-void emoji_Support(bool reconfigure = false)
+void emoji_Support(bool reconfigure)
 {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
@@ -254,27 +335,6 @@ void play_Sound(int soundType)
     }
 }
 
-// Enum for building types
-enum class BuildingType
-{
-    None,
-    Road,
-    Residential,
-    Commercial,
-    Industrial,
-    Hospital,
-    School,
-    Park,
-    Tree,
-    SolarPlant,
-    WindTurbine,
-    Airport,
-    WaterTreatment,
-    RecyclingCenter,
-    FireStation,
-    PoliceStation
-};
-
 // Stats structure
 typedef struct
 {
@@ -435,18 +495,18 @@ class FireStation : public Building
 {
 public:
     FireStation() : Building(BuildingType::FireStation,
-                             {200, 15, 0, 2, 0, 0, 0, 0, 5, 0, 0},
+                             {200, 10, 0, 2, 0, 0, 0, 0, 5, 0, 0},
                              "🚒", B_RED, true,
-                             "Improves city safety") {}
+                             "Improves safety and emergency response") {}
 };
 
 class PoliceStation : public Building
 {
 public:
     PoliceStation() : Building(BuildingType::PoliceStation,
-                               {200, 15, 0, 2, 0, 0, 0, 0, 5, 0, 0},
-                               "🚓", B_BLUE, true,
-                               "Improves city safety and reduces crime") {}
+                               {200, 10, 0, 1, 0, 0, 0, 0, 8, 0, 0},
+                               "👮", B_BLUE, true,
+                               "Improves safety and reduces crime") {}
 };
 
 // Tile structure for map
@@ -459,7 +519,57 @@ struct Tile
     unique_ptr<Building> building;
     bool highlight;
 
-    Tile() : isLand(false), highlight(false) {}
+    Tile() : isLand(false), highlight(false), building(nullptr) {}
+    ~Tile() { building.reset(); }
+    
+    // Delete copy operations
+    Tile(const Tile&) = delete;
+    Tile& operator=(const Tile&) = delete;
+    
+    // Add move operations
+    Tile(Tile&& other) noexcept 
+        : texture(std::move(other.texture))
+        , colour(std::move(other.colour))
+        , type(std::move(other.type))
+        , isLand(other.isLand)
+        , building(std::move(other.building))
+        , highlight(other.highlight) 
+    {
+        other.building = nullptr;
+    }
+        
+    Tile& operator=(Tile&& other) noexcept {
+        if (this != &other) {
+            building.reset();
+            texture = std::move(other.texture);
+            colour = std::move(other.colour);
+            type = std::move(other.type);
+            isLand = other.isLand;
+            building = std::move(other.building);
+            highlight = other.highlight;
+            other.building = nullptr;
+        }
+        return *this;
+    }
+
+    void display() const
+    {
+        if (building)
+        {
+            cout << building->getDisplayIcon();
+        }
+        else
+        {
+            if (highlight)
+            {
+                cout << REVERSE << colour << texture << RESET;
+            }
+            else
+            {
+                cout << colour << texture << RESET;
+            }
+        }
+    }
 };
 
 // Time Manager for months
@@ -501,30 +611,85 @@ public:
     }
 };
 
-// UI layout variables - will be calculated based on map size
-int menuRow;          // Row for menu tabs
-int menuCol;          // Column for menu start
-int statsRow;         // Row for stats panel start
-int statsCol;         // Column for stats panel
-int maxDropdownItems; // Max dropdown items to display
-int tooltipRow;       // Row for tooltip display
-int messageRow;       // Row for action messages
-int logRow;           // Row for game log
-int logCol;           // Column for game log
-
-// Menu system forward declaration
-struct Menu;
-void draw_Menu();
-void setup_Menus();
-void rebuild_TabPositions();
-void compute_UI_positions();
-
 // City class to manage game state
 class City
 {
+protected:
+    vector<vector<unique_ptr<Tile>>> map;
+    unique_ptr<TimeManager> timer;
+    vector<string> gameLog;
+    int maxLogEntries = 50;
+
+    void initializeMap() {
+        map.resize(map_height);
+        for (int i = 0; i < map_height; i++) {
+            map[i].resize(map_width);
+            for (int j = 0; j < map_width; j++) {
+                map[i][j] = make_unique<Tile>();
+            }
+        }
+    }
+
+    bool isValidPosition(int row, int col) const {
+        return row >= 0 && row < map_height && col >= 0 && col < map_width;
+    }
+
+    bool canPlaceBuilding(int row, int col, BuildingType type) const {
+        if (!isValidPosition(row, col) || map[row][col]->building) {
+            return false;
+        }
+
+        // Check if tile is land
+        if (!map[row][col]->isLand) {
+            return false;
+        }
+
+        // Special placement rules
+        switch (type) {
+            case BuildingType::Road:
+                return true;
+            case BuildingType::Tree:
+                return true;
+            default:
+                // Other buildings need to be adjacent to a road
+                return hasAdjacentRoad(row, col);
+        }
+    }
+
+    bool hasAdjacentRoad(int row, int col) const {
+        const int dr[] = {-1, 1, 0, 0};
+        const int dc[] = {0, 0, -1, 1};
+        
+        for (int i = 0; i < 4; i++) {
+            int nr = row + dr[i];
+            int nc = col + dc[i];
+            if (isValidPosition(nr, nc) && 
+                map[nr][nc]->building && 
+                map[nr][nc]->building->type == BuildingType::Road) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void updateCityStats(Building* building, bool adding) {
+        int factor = adding ? 1 : -1;
+        maintenance += building->stats.maintenance * factor;
+        pollution += building->stats.pollution * factor;
+        greenLevel += building->stats.green * factor;
+        ecoPoints += building->stats.ecoPoints * factor;
+        energy += building->stats.energy * factor;
+        safety += building->stats.safety * factor;
+        education += building->stats.education * factor;
+        health += building->stats.health * factor;
+    }
+
+    string getCoordinateString(int row, int col) const {
+        return string(1, 'A' + row) + to_string(col + 1);
+    }
+
 public:
     // Game state
-    Tile map[map_height][map_width];
     int money;
     int population;
     int happiness;
@@ -536,10 +701,8 @@ public:
     int safety;
     int education;
     int health;
-    TimeManager timer;
     BuildingType currentTool;
     int totalBuildings;
-    vector<string> gameLog;
 
     // Selected tile for building
     int selectedRow;
@@ -549,42 +712,186 @@ public:
     // Stats display mode
     int statsDisplayMode;
 
-    City(int monthSec = 10) : money(config.startingMoney),
-                              population(config.startingPopulation),
-                              happiness(75),
-                              ecoPoints(0),
-                              pollution(0),
-                              greenLevel(0),
-                              energy(0),
-                              maintenance(0),
-                              safety(0),
-                              education(0),
-                              health(0),
-                              timer(monthSec),
-                              currentTool(BuildingType::None),
-                              totalBuildings(0),
-                              selectedRow(-1),
-                              selectedCol(-1),
-                              hasSelection(false),
-                              statsDisplayMode(1)
+    // Helper functions
+    int calculatePopulation() const {
+        int basePop = 100;
+        int popFromBuildings = 0;
+        
+        // Count population from residential buildings
+        for (int i = 0; i < map_height; i++) {
+            for (int j = 0; j < map_width; j++) {
+                if (map[i][j]->building && map[i][j]->building->type == BuildingType::Residential) {
+                    popFromBuildings += 50; // Each house adds 50 people
+                }
+            }
+        }
+        
+        // Apply happiness modifier
+        float happinessModifier = 1.0f + (happiness - 50) / 100.0f;
+        return basePop + (int)(popFromBuildings * happinessModifier);
+    }
+
+    int calculateHappiness() const {
+        int baseHappiness = 50;
+        
+        // Factors affecting happiness
+        int greenFactor = greenLevel / 10;
+        int pollutionFactor = -pollution / 5;
+        int safetyFactor = safety / 10;
+        int healthFactor = health / 10;
+        int educationFactor = education / 10;
+        
+        // Calculate total happiness
+        int totalHappiness = baseHappiness + greenFactor + pollutionFactor + 
+                           safetyFactor + healthFactor + educationFactor;
+        
+        // Ensure happiness stays within bounds
+        return max(0, min(100, totalHappiness));
+    }
+
+    int calculateEcoPoints() const {
+        int points = 0;
+        
+        // Base points from green buildings
+        points += greenLevel;
+        
+        // Points from eco-friendly buildings
+        for (int i = 0; i < map_height; i++) {
+            for (int j = 0; j < map_width; j++) {
+                if (map[i][j]->building) {
+                    points += map[i][j]->building->stats.ecoPoints;
+                }
+            }
+        }
+        
+        // Penalty for pollution
+        points -= pollution / 2;
+        
+        return max(0, points);
+    }
+
+    int calculateIncome() const {
+        int baseIncome = population * 5; // $5 per citizen
+        int commercialIncome = 0;
+        
+        // Income from commercial buildings
+        for (int i = 0; i < map_height; i++) {
+            for (int j = 0; j < map_width; j++) {
+                if (map[i][j]->building && map[i][j]->building->type == BuildingType::Commercial) {
+                    commercialIncome += 100; // Each commercial building adds $100
+                }
+            }
+        }
+        
+        return baseIncome + commercialIncome;
+    }
+
+    int calculateExpenses() const {
+        return maintenance; // Currently just maintenance costs
+    }
+
+    // Static helper functions
+    static int getBuildingCost(BuildingType type) {
+        switch (type) {
+            case BuildingType::Road: return 10;
+            case BuildingType::Residential: return 100;
+            case BuildingType::Commercial: return 150;
+            case BuildingType::Industrial: return 200;
+            case BuildingType::Hospital: return 300;
+            case BuildingType::School: return 250;
+            case BuildingType::Park: return 50;
+            case BuildingType::Tree: return 10;
+            case BuildingType::SolarPlant: return 400;
+            case BuildingType::WindTurbine: return 500;
+            case BuildingType::WaterTreatment: return 350;
+            case BuildingType::RecyclingCenter: return 300;
+            case BuildingType::FireStation: return 200;
+            case BuildingType::PoliceStation: return 200;
+            case BuildingType::Airport: return 1000;
+            default: return 0;
+        }
+    }
+
+    static string getBuildingName(BuildingType type) {
+        switch (type) {
+            case BuildingType::Road: return "Road";
+            case BuildingType::Residential: return "House";
+            case BuildingType::Commercial: return "Office";
+            case BuildingType::Industrial: return "Factory";
+            case BuildingType::Hospital: return "Hospital";
+            case BuildingType::School: return "School";
+            case BuildingType::Park: return "Park";
+            case BuildingType::Tree: return "Tree";
+            case BuildingType::SolarPlant: return "Solar Plant";
+            case BuildingType::WindTurbine: return "Wind Turbine";
+            case BuildingType::WaterTreatment: return "Water Treatment";
+            case BuildingType::RecyclingCenter: return "Recycling Center";
+            case BuildingType::FireStation: return "Fire Station";
+            case BuildingType::PoliceStation: return "Police Station";
+            case BuildingType::Airport: return "Airport";
+            default: return "Unknown Building";
+        }
+    }
+
+    static unique_ptr<Building> createBuilding(BuildingType type) {
+        switch (type) {
+            case BuildingType::Road: return make_unique<Road>();
+            case BuildingType::Residential: return make_unique<Residential>();
+            case BuildingType::Commercial: return make_unique<Commercial>();
+            case BuildingType::Industrial: return make_unique<Industrial>();
+            case BuildingType::Hospital: return make_unique<Hospital>();
+            case BuildingType::School: return make_unique<School>();
+            case BuildingType::Park: return make_unique<Park>();
+            case BuildingType::Tree: return make_unique<Tree>();
+            case BuildingType::SolarPlant: return make_unique<SolarPlant>();
+            case BuildingType::WindTurbine: return make_unique<WindTurbine>();
+            case BuildingType::WaterTreatment: return make_unique<WaterTreatment>();
+            case BuildingType::RecyclingCenter: return make_unique<RecyclingCenter>();
+            case BuildingType::FireStation: return make_unique<FireStation>();
+            case BuildingType::PoliceStation: return make_unique<PoliceStation>();
+            case BuildingType::Airport: return make_unique<Airport>();
+            default: return nullptr;
+        }
+    }
+
+    City(int monthSec = 10) : 
+        money(10000),
+        population(100),
+        happiness(75),
+        ecoPoints(0),
+        pollution(0),
+        greenLevel(0),
+        energy(0),
+        maintenance(0),
+        safety(0),
+        education(0),
+        health(0),
+        currentTool(BuildingType::None),
+        totalBuildings(0),
+        selectedRow(-1),
+        selectedCol(-1),
+        hasSelection(false),
+        statsDisplayMode(1)
     {
+        timer = make_unique<TimeManager>(monthSec);
+        initializeMap();
         generate_Map();
-        timer.onMonthChange = [this]()
-        { this->monthlyUpdate(); };
+        
+        timer->onMonthChange = [this]() { this->monthlyUpdate(); };
 
         // Place central airport
         int cx = map_height / 2;
         int cy = map_width / 2;
-        map[cx][cy].building = make_unique<Airport>();
+        map[cx][cy]->building = make_unique<Airport>();
         totalBuildings++;
 
         // Add initial log entry
-        addToLog("Welcome to Eco-City Builder! City founded in " + timer.getDate());
+        addToLog("Welcome to Eco-City Builder! City founded in " + timer->getDate());
     }
 
     void generate_Map()
     {
-        int cx = map_width / 2, cy = map_height / 2, radius = map_width / 3;
+        int cx = map_width / 2, cy = map_height / 2, radius = 16;
         float sx = 1, sy = 2.5;
         for (int i = 0; i < map_height; i++)
         {
@@ -594,1195 +901,159 @@ public:
                 bool isWater = (d + (rand() % 3 - 1)) > radius;
                 if (isWater)
                 {
-                    map[i][j].colour = custom_Background(117, 226, 254) + custom_Colour(93, 181, 203);
-                    map[i][j].texture = (rand() % 100 < 30 ? "~ " : "  ");
-                    map[i][j].type = "Water";
-                    map[i][j].isLand = false;
+                    map[i][j]->colour = custom_Background(117, 226, 254) + custom_Colour(93, 181, 203);
+                    map[i][j]->texture = (rand() % 100 < 30 ? "~ " : "  ");
+                    map[i][j]->type = "Water";
+                    map[i][j]->isLand = false;
                 }
                 else
                 {
-                    map[i][j].colour = custom_Background(131, 198, 105) + custom_Colour(80, 130, 60);
-                    map[i][j].texture = (rand() % 100 < 20 ? "^^" : "  ");
-                    map[i][j].type = "Land";
-                    map[i][j].isLand = true;
+                    map[i][j]->colour = custom_Background(131, 198, 105) + custom_Colour(80, 130, 60);
+                    map[i][j]->texture = (rand() % 100 < 20 ? "^^" : "  ");
+                    map[i][j]->type = "Land";
+                    map[i][j]->isLand = true;
                 }
-                map[i][j].highlight = false;
-                // Clear any existing buildings
-                map[i][j].building.reset();
+                map[i][j]->highlight = false;
             }
         }
     }
 
     void display_Map()
     {
-        // Top border
-        cout << "\033[1;1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-        for (int c = 0, k = 1; c < map_width; c++, ++k)
-        {
-            cout << setw(tileWidth) << left << k;
-            if (k > 8)
-            {
-                k -= 9;
-            }
-        }
-        cout << "   " << RESET << "\n";
-
-        // Rows
-        for (int i = 0; i < map_height; i++)
-        {
-            cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32)
-                 << " " << char('A' + i) << " " << RESET;
-
-            for (int j = 0; j < map_width; j++)
-            {
-                if (map[i][j].building)
-                {
-                    cout << map[i][j].building->getDisplayIcon();
+        for (int i = 0; i < map_height; i++) {
+            for (int j = 0; j < map_width; j++) {
+                cout << "\033[" << (i + 2) << ";" << (j * tileWidth + leftOffset) << "H";
+                if (i == selectedRow && j == selectedCol) {
+                    cout << REVERSE;
                 }
-                else
-                {
-                    if (map[i][j].highlight)
-                    {
-                        cout << REVERSE << map[i][j].colour << map[i][j].texture << RESET;
-                    }
-                    else
-                    {
-                        cout << map[i][j].colour << map[i][j].texture << RESET;
-                    }
-                }
-            }
-
-            cout << BOLD << custom_Background(32, 32, 32)
-                 << " " << char('A' + i) << " " << RESET << "\n";
-        }
-
-        // Bottom border
-        cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
-        for (int c = 0, k = 1; c < map_width; c++, ++k)
-        {
-            cout << setw(tileWidth) << left << k;
-            if (k > 8)
-            {
-                k -= 9;
+                map[i][j]->display();
+                cout << RESET;
             }
         }
-        cout << "   " << RESET << "\n";
     }
 
-    void addToLog(const string &message)
-    {
-        // Add timestamp
-        time_t now = time(nullptr);
-        tm *timeinfo = localtime(&now);
-        char buffer[9];
-        strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
-
-        string logEntry = string(buffer) + " - " + message;
-        gameLog.push_back(logEntry);
-
-        // Keep log at a reasonable size
-        if (gameLog.size() > 100)
-        {
+    void addToLog(const string& message) {
+        gameLog.push_back(message);
+        if (gameLog.size() > maxLogEntries) {
             gameLog.erase(gameLog.begin());
         }
-
-        // Draw the log
-        draw_Log();
     }
 
-    void draw_Log()
-    {
-        int logLimit = 5; // Show last 5 log entries
-        int startIdx = max(0, (int)gameLog.size() - logLimit);
-
-        // Clear log area
-        for (int i = 0; i < logLimit; i++)
-        {
-            cout << "\033[" << (logRow + i) << ";" << logCol << "H" << string(60, ' ');
-        }
-
-        // Display header
-        cout << "\033[" << logRow - 1 << ";" << logCol << "H" << BOLD << "--- Event Log ---" << RESET;
-
-        // Display log entries
-        for (int i = 0; i < min(logLimit, (int)gameLog.size()); i++)
-        {
-            int idx = startIdx + i;
-            if (idx < gameLog.size())
-            {
-                cout << "\033[" << (logRow + i) << ";" << logCol << "H" << gameLog[idx];
-            }
-        }
+    void monthlyUpdate() {
+        // Update city stats based on buildings and current state
+        population = calculatePopulation();
+        happiness = calculateHappiness();
+        ecoPoints = calculateEcoPoints();
+        
+        // Add monthly income/expenses
+        int income = calculateIncome();
+        int expenses = calculateExpenses();
+        money += income - expenses;
+        
+        // Log monthly update
+        addToLog(timer->getDate() + ": Population: " + to_string(population) + 
+                ", Money: $" + to_string(money) + 
+                ", Happiness: " + to_string(happiness) + "%");
     }
 
-    void monthlyUpdate()
-    {
-        // Calculate income and expenses
-        int income = population * 5; // $5 per citizen
-        int expenses = maintenance;
-        money += (income - expenses);
-
-        // Add to log
-        addToLog("Monthly update: $" + to_string(income) + " income, $" + to_string(expenses) + " expenses");
-
-        // Update population based on happiness and residential buildings
-        int popGrowth = 0;
-        if (happiness > 50)
-        {
-            popGrowth = population * 0.02; // 2% growth if happy
-        }
-        else
-        {
-            popGrowth = population * 0.01; // 1% growth otherwise
-        }
-        population += popGrowth;
-
-        if (popGrowth > 0)
-        {
-            addToLog("Population grew by " + to_string(popGrowth) + " citizens");
-        }
-
-        // Update happiness based on various factors
-        int happinessChange = 0;
-        happinessChange += (greenLevel - pollution) / 10;
-        happinessChange += (safety / 10);
-        happinessChange += (health / 20);
-        happinessChange += (education / 20);
-
-        // More parks/trees increase happiness
-        if (greenLevel > 20)
-            happinessChange += 1;
-
-        // High pollution decreases happiness
-        if (pollution > 30)
-            happinessChange -= 2;
-
-        // Low energy decreases happiness
-        if (energy < population / 100)
-            happinessChange -= 1;
-
-        int oldHappiness = happiness;
-        happiness = max(0, min(100, happiness + happinessChange));
-
-        if (happiness != oldHappiness)
-        {
-            if (happiness > oldHappiness)
-            {
-                addToLog("Citizens happiness increased to " + to_string(happiness) + "%");
-            }
-            else
-            {
-                addToLog("Citizens happiness decreased to " + to_string(happiness) + "%");
-            }
-        }
-
-        // Natural reduction in ecoPoints and pollution
-        ecoPoints = max(0, ecoPoints - 1);
-        pollution = max(0, pollution - 1);
-
-        draw_Stats(); // Update stats display
-    }
-
-    bool canBuildAt(int row, int col, BuildingType type)
-    {
-        // Check bounds
-        if (row < 0 || row >= map_height || col < 0 || col >= map_width)
-            return false;
-
-        // Can't build on water (except specific buildings)
-        if (!map[row][col].isLand && type != BuildingType::None)
-            return false;
-
-        // Can't build where there's already a building
-        if (map[row][col].building)
-            return false;
-
-        // Building-specific restrictions could be added here
-
-        return true;
-    }
-
-    bool placeBuilding(int row, int col, BuildingType type)
-    {
-        if (!canBuildAt(row, col, type))
-            return false;
-
-        // Check if enough money
-        int cost = 0;
-        string buildingName;
-
-        switch (type)
-        {
-        case BuildingType::Road:
-            map[row][col].building = make_unique<Road>();
-            cost = 10;
-            buildingName = "Road";
-            break;
-        case BuildingType::Residential:
-            map[row][col].building = make_unique<Residential>();
-            cost = 100;
-            buildingName = "House";
-            break;
-        case BuildingType::Commercial:
-            map[row][col].building = make_unique<Commercial>();
-            cost = 150;
-            buildingName = "Office";
-            break;
-        case BuildingType::Industrial:
-            map[row][col].building = make_unique<Industrial>();
-            cost = 200;
-            buildingName = "Factory";
-            break;
-        case BuildingType::Hospital:
-            map[row][col].building = make_unique<Hospital>();
-            cost = 300;
-            buildingName = "Hospital";
-            break;
-        case BuildingType::School:
-            map[row][col].building = make_unique<School>();
-            cost = 250;
-            buildingName = "School";
-            break;
-        case BuildingType::Park:
-            map[row][col].building = make_unique<Park>();
-            cost = 50;
-            buildingName = "Park";
-            break;
-        case BuildingType::Tree:
-            map[row][col].building = make_unique<Tree>();
-            cost = 10;
-            buildingName = "Tree";
-            break;
-        case BuildingType::SolarPlant:
-            map[row][col].building = make_unique<SolarPlant>();
-            cost = 400;
-            buildingName = "Solar Plant";
-            break;
-        case BuildingType::WindTurbine:
-            map[row][col].building = make_unique<WindTurbine>();
-            cost = 500;
-            buildingName = "Wind Turbine";
-            break;
-        case BuildingType::WaterTreatment:
-            map[row][col].building = make_unique<WaterTreatment>();
-            cost = 350;
-            buildingName = "Water Treatment";
-            break;
-        case BuildingType::RecyclingCenter:
-            map[row][col].building = make_unique<RecyclingCenter>();
-            cost = 300;
-            buildingName = "Recycling Center";
-            break;
-        case BuildingType::FireStation:
-            map[row][col].building = make_unique<FireStation>();
-            cost = 200;
-            buildingName = "Fire Station";
-            break;
-        case BuildingType::PoliceStation:
-            map[row][col].building = make_unique<PoliceStation>();
-            cost = 200;
-            buildingName = "Police Station";
-            break;
-        case BuildingType::Airport:
-            map[row][col].building = make_unique<Airport>();
-            cost = 1000;
-            buildingName = "Airport";
-            break;
-        case BuildingType::None:
-            // Clear the tile
-            map[row][col].building.reset();
-            return true;
-        default:
+    bool placeBuilding(int row, int col, BuildingType type) {
+        if (!isValidPosition(row, col) || !canPlaceBuilding(row, col, type)) {
             return false;
         }
 
-        // Check if player has enough money
-        if (money < cost)
-        {
-            play_Sound(3); // Error sound
-            draw_Message("Not enough money. Need $" + to_string(cost));
+        int cost = getBuildingCost(type);
+        if (money < cost) {
+            addToLog("Not enough money to build " + getBuildingName(type));
             return false;
         }
 
-        // Apply the building's effects
-        money -= cost;
-        totalBuildings++;
+        // Create and place the building
+        unique_ptr<Building> building = createBuilding(type);
+        if (!building) {
+            return false;
+        }
 
         // Update city stats
-        if (map[row][col].building)
-        {
-            const Stats &bStats = map[row][col].building->stats;
-            maintenance += bStats.maintenance;
-            pollution += bStats.pollution;
-            greenLevel += bStats.green;
-            ecoPoints += bStats.ecoPoints;
-            energy += bStats.energy;
-            safety += bStats.safety;
-            education += bStats.education;
-            health += bStats.health;
-        }
+        money -= cost;
+        totalBuildings++;
+        updateCityStats(building.get(), true);
 
-        // Log the construction
-        addToLog("Built " + buildingName + " at " + char('A' + row) + to_string(col + 1));
-        play_Sound(1); // Build sound
-
-        draw_Stats(); // Update stats display
+        // Place the building
+        map[row][col]->building = move(building);
+        addToLog("Built " + getBuildingName(type) + " at " + getCoordinateString(row, col));
+        
         return true;
     }
 
-    bool removeBuilding(int row, int col)
-    {
-        // Check if there's a building
-        if (!map[row][col].building)
-            return false;
-
-        // Check if building is removable
-        if (!map[row][col].building->removable)
-        {
-            play_Sound(3); // Error sound
-            draw_Message("This building cannot be removed.");
+    bool removeBuilding(int row, int col) {
+        if (!isValidPosition(row, col) || !map[row][col]->building) {
             return false;
         }
 
-        // Get building name before removing
-        string buildingName;
-        switch (map[row][col].building->type)
-        {
-        case BuildingType::Road:
-            buildingName = "Road";
-            break;
-        case BuildingType::Residential:
-            buildingName = "House";
-            break;
-        case BuildingType::Commercial:
-            buildingName = "Office";
-            break;
-        case BuildingType::Industrial:
-            buildingName = "Factory";
-            break;
-        case BuildingType::Hospital:
-            buildingName = "Hospital";
-            break;
-        case BuildingType::School:
-            buildingName = "School";
-            break;
-        case BuildingType::Park:
-            buildingName = "Park";
-            break;
-        case BuildingType::Tree:
-            buildingName = "Tree";
-            break;
-        case BuildingType::SolarPlant:
-            buildingName = "Solar Plant";
-            break;
-        case BuildingType::WindTurbine:
-            buildingName = "Wind Turbine";
-            break;
-        case BuildingType::Airport:
-            buildingName = "Airport";
-            break;
-        case BuildingType::WaterTreatment:
-            buildingName = "Water Treatment";
-            break;
-        case BuildingType::RecyclingCenter:
-            buildingName = "Recycling Center";
-            break;
-        case BuildingType::FireStation:
-            buildingName = "Fire Station";
-            break;
-        case BuildingType::PoliceStation:
-            buildingName = "Police Station";
-            break;
-        default:
-            buildingName = "Building";
-            break;
+        if (!map[row][col]->building->removable) {
+            addToLog("This building cannot be removed");
+            return false;
         }
 
-        // Get building's stats to revert changes
-        const Stats &bStats = map[row][col].building->stats;
-        maintenance -= bStats.maintenance;
-        pollution -= bStats.pollution;
-        greenLevel -= bStats.green;
-        ecoPoints -= bStats.ecoPoints;
-        energy -= bStats.energy;
-        safety -= bStats.safety;
-        education -= bStats.education;
-        health -= bStats.health;
-
-        // Remove the building
-        map[row][col].building.reset();
+        // Update city stats
+        updateCityStats(map[row][col]->building.get(), false);
         totalBuildings--;
 
-        // Log the demolition
-        addToLog("Demolished " + buildingName + " at " + char('A' + row) + to_string(col + 1));
-        play_Sound(2); // Demolish sound
-
-        draw_Stats(); // Update stats display
+        // Remove the building
+        string buildingName = getBuildingName(map[row][col]->building->type);
+        map[row][col]->building.reset();
+        addToLog("Removed " + buildingName + " at " + getCoordinateString(row, col));
+        
         return true;
     }
 
-    void draw_Stats()
-    {
-        int row = statsRow;
-        int col = statsCol;
+    void draw_Stats() {
+        // Clear stats area
+        cout << "\033[" << statsRow << ";" << statsCol << "H";
+        cout << string(40, ' ');
 
-        // Clear stats area first
-        for (int i = 0; i < 15; i++)
-        {
-            cout << "\033[" << (row + i) << ";" << col << "H" << string(30, ' ');
-        }
-
-        // Title
-        cout << "\033[" << row++ << ";" << col << "H"
-             << BOLD << theme_Color(2) << "--- CITY STATS ---" << RESET;
-
-        // Date
-        cout << "\033[" << row++ << ";" << col << "H"
-             << theme_Color(1) << "Date: " << RESET << timer.getDate();
-
-        // Money
-        cout << "\033[" << row++ << ";" << col << "H"
-             << theme_Color(1) << "Money: " << RESET << "$" << money;
-
-        // Population
-        cout << "\033[" << row++ << ";" << col << "H"
-             << theme_Color(1) << "Population: " << RESET << population;
-
-        // Happiness
-        cout << "\033[" << row++ << ";" << col << "H"
-             << theme_Color(1) << "Happiness: " << RESET;
-
-        // Happiness bar
-        string happinessColor;
-        if (happiness < 30)
-            happinessColor = RED;
-        else if (happiness < 70)
-            happinessColor = YELLOW;
-        else
-            happinessColor = GREEN;
-
-        cout << happinessColor << "[";
-        int bars = happiness / 10;
-        for (int i = 0; i < 10; i++)
-        {
-            if (i < bars)
-                cout << "■";
-            else
-                cout << "□";
-        }
-        cout << "] " << happiness << "%" << RESET;
-
-        row++;
-
-        // Show different stats based on display mode
-        if (statsDisplayMode == 1)
-        { // Environmental stats
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << BOLD << theme_Color(2) << "-- Environmental --" << RESET;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Eco Points: " << RESET << ecoPoints;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Pollution: " << RESET << pollution;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Green Level: " << RESET << greenLevel;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Energy: " << RESET << energy;
-        }
-        else if (statsDisplayMode == 2)
-        { // Social stats
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << BOLD << theme_Color(2) << "-- Social Stats --" << RESET;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Safety: " << RESET << safety;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Education: " << RESET << education;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Health: " << RESET << health;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Crime Rate: " << RESET
-                 << max(0, min(100, 100 - safety)) << "%";
-        }
-        else if (statsDisplayMode == 3)
-        { // Building stats
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << BOLD << theme_Color(2) << "-- Building Stats --" << RESET;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Total Buildings: " << RESET << totalBuildings;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Maintenance: " << RESET << "$" << maintenance;
-
-            // Count each building type
-            int residential = 0, commercial = 0, industrial = 0;
-            for (int i = 0; i < map_height; i++)
-            {
-                for (int j = 0; j < map_width; j++)
-                {
-                    if (map[i][j].building)
-                    {
-                        if (map[i][j].building->type == BuildingType::Residential)
-                            residential++;
-                        else if (map[i][j].building->type == BuildingType::Commercial)
-                            commercial++;
-                        else if (map[i][j].building->type == BuildingType::Industrial)
-                            industrial++;
-                    }
-                }
-            }
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Residential: " << RESET << residential;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Commercial: " << RESET << commercial;
-
-            cout << "\033[" << row++ << ";" << col << "H"
-                 << theme_Color(1) << "Industrial: " << RESET << industrial;
-        }
-
-        // Display cycle button
-        cout << "\033[" << (row + 1) << ";" << col << "H"
-             << "[S] " << theme_Color(2) << "Cycle Stats" << RESET;
-    }
-};
-
-// Global city instance
-City *city;
-
-// Draw message at bottom of screen
-void draw_Message(const std::string &msg)
-{
-    cout << "\033[" << messageRow << ";1H" << string(80, ' '); // Clear line
-    cout << "\033[" << messageRow << ";1H" << BOLD << msg << RESET;
-}
-
-// Menu system
-struct MenuItem
-{
-    string label;
-    function<void()> action;
-    BuildingType buildingType;
-    string description;
-
-    MenuItem(string l, function<void()> a, BuildingType bt = BuildingType::None, string desc = "")
-        : label(l), action(a), buildingType(bt), description(desc) {}
-};
-
-struct Menu
-{
-    string name;
-    vector<MenuItem> items;
-    int tabPos;       // Position of this tab
-    int tabWidth;     // Width of tab
-    bool visible;     // Is menu expanded
-    int selectedItem; // Currently selected item
-
-    Menu(string n) : name(n), tabPos(0), tabWidth(name.length() + 2), visible(false), selectedItem(-1) {}
-
-    void addItem(string label, function<void()> action, BuildingType bt = BuildingType::None, string desc = "")
-    {
-        items.emplace_back(label, action, bt, desc);
-    }
-
-    void toggleVisibility()
-    {
-        visible = !visible;
-        if (visible)
-        {
-            selectedItem = -1; // Reset selection
+        // Display stats based on current mode
+        switch (statsDisplayMode) {
+            case 1: // General stats
+                cout << "\033[" << statsRow << ";" << statsCol << "H";
+                cout << BOLD << "City Stats" << RESET << "\n";
+                cout << "Money: $" << money << "\n";
+                cout << "Population: " << population << "\n";
+                cout << "Happiness: " << happiness << "%\n";
+                cout << "Buildings: " << totalBuildings;
+                break;
+            case 2: // Environment stats
+                cout << "\033[" << statsRow << ";" << statsCol << "H";
+                cout << BOLD << "Environment" << RESET << "\n";
+                cout << "Eco Points: " << ecoPoints << "\n";
+                cout << "Pollution: " << pollution << "\n";
+                cout << "Green Level: " << greenLevel << "\n";
+                cout << "Energy: " << energy;
+                break;
+            case 3: // Services stats
+                cout << "\033[" << statsRow << ";" << statsCol << "H";
+                cout << BOLD << "Services" << RESET << "\n";
+                cout << "Safety: " << safety << "\n";
+                cout << "Education: " << education << "\n";
+                cout << "Health: " << health << "\n";
+                cout << "Maintenance: " << maintenance;
+                break;
         }
     }
 
-    void draw()
-    {
-        // Draw tab
-        cout << "\033[" << menuRow << ";" << tabPos << "H";
-        if (visible)
-        {
-            cout << BOLD << BG_WHITE << BLACK << " " << name << " " << RESET;
-        }
-        else
-        {
-            cout << BOLD << " " << name << " " << RESET;
-        }
+    void draw_Log() {
+        // Clear log area
+        cout << "\033[" << logRow << ";" << logCol << "H";
+        cout << string(60, ' ');
 
-        // Draw dropdown if visible
-        if (visible)
-        {
-            int numToShow = min(maxDropdownItems, (int)items.size());
-            for (int i = 0; i < numToShow; i++)
-            {
-                cout << "\033[" << (menuRow + i + 1) << ";" << tabPos << "H";
-
-                if (i == selectedItem)
-                {
-                    cout << BOLD << REVERSE << " " << items[i].label << string(15 - items[i].label.length(), ' ') << " " << RESET;
-                }
-                else
-                {
-                    cout << " " << items[i].label << string(15 - items[i].label.length(), ' ') << " ";
-                }
-            }
-
-            // Show description of selected item
-            if (selectedItem >= 0 && selectedItem < items.size())
-            {
-                string desc = items[selectedItem].description;
-                if (!desc.empty())
-                {
-                    cout << "\033[" << tooltipRow << ";1H" << string(80, ' '); // Clear line
-                    cout << "\033[" << tooltipRow << ";1H" << ITALIC << desc << RESET;
-                }
-            }
+        // Display recent log entries
+        cout << "\033[" << logRow << ";" << logCol << "H";
+        cout << BOLD << "Recent Events:" << RESET << "\n";
+        for (size_t i = max(0, static_cast<int>(gameLog.size()) - 5); i < gameLog.size(); i++) {
+            cout << gameLog[i] << "\n";
         }
     }
 };
-
-// Menu instances
-vector<Menu> menus;
-int activeMenu = -1;
-
-// Create menu system
-void setup_Menus()
-{
-    // Build menu
-    Menu buildMenu("Build");
-    buildMenu.addItem("Road", []()
-                      { city->currentTool = BuildingType::Road; }, BuildingType::Road, "Build roads to connect buildings");
-    buildMenu.addItem("Residential", []()
-                      { city->currentTool = BuildingType::Residential; }, BuildingType::Residential, "Build housing for your citizens");
-    buildMenu.addItem("Commercial", []()
-                      { city->currentTool = BuildingType::Commercial; }, BuildingType::Commercial, "Build offices and shops");
-    buildMenu.addItem("Industrial", []()
-                      { city->currentTool = BuildingType::Industrial; }, BuildingType::Industrial, "Build factories for jobs");
-    buildMenu.addItem("Hospital", []()
-                      { city->currentTool = BuildingType::Hospital; }, BuildingType::Hospital, "Improve city health");
-    buildMenu.addItem("School", []()
-                      { city->currentTool = BuildingType::School; }, BuildingType::School, "Improve city education");
-    buildMenu.addItem("Park", []()
-                      { city->currentTool = BuildingType::Park; }, BuildingType::Park, "Increase happiness and greenery");
-    buildMenu.addItem("Tree", []()
-                      { city->currentTool = BuildingType::Tree; }, BuildingType::Tree, "Cheap way to improve environment");
-    menus.push_back(buildMenu);
-
-    // Eco menu
-    Menu ecoMenu("Ecology");
-    ecoMenu.addItem("Solar Plant", []()
-                    { city->currentTool = BuildingType::SolarPlant; }, BuildingType::SolarPlant, "Clean energy source");
-    ecoMenu.addItem("Wind Turbine", []()
-                    { city->currentTool = BuildingType::WindTurbine; }, BuildingType::WindTurbine, "Efficient renewable energy");
-    ecoMenu.addItem("Water Plant", []()
-                    { city->currentTool = BuildingType::WaterTreatment; }, BuildingType::WaterTreatment, "Clean water and reduce pollution");
-    ecoMenu.addItem("Recycling", []()
-                    { city->currentTool = BuildingType::RecyclingCenter; }, BuildingType::RecyclingCenter, "Reduce waste and pollution");
-    menus.push_back(ecoMenu);
-
-    // Services menu
-    Menu servicesMenu("Services");
-    servicesMenu.addItem("Fire Station", []()
-                         { city->currentTool = BuildingType::FireStation; }, BuildingType::FireStation, "Improve city safety");
-    servicesMenu.addItem("Police", []()
-                         { city->currentTool = BuildingType::PoliceStation; }, BuildingType::PoliceStation, "Reduce crime and improve safety");
-    menus.push_back(servicesMenu);
-
-    // Tools menu
-    Menu toolsMenu("Tools");
-    toolsMenu.addItem("Select", []()
-                      { city->currentTool = BuildingType::None; }, BuildingType::None, "Select and view buildings");
-    toolsMenu.addItem("Demolish", []()
-                      { 
-        if (city->hasSelection) {
-            city->removeBuilding(city->selectedRow, city->selectedCol);
-            city->hasSelection = false;
-        } else {
-            draw_Message("First select a building to demolish");
-        } }, BuildingType::None, "Remove existing buildings");
-    toolsMenu.addItem("Toggle Stats", []()
-                      { 
-        city->statsDisplayMode = (city->statsDisplayMode % 3) + 1; 
-        city->draw_Stats(); }, BuildingType::None, "Cycle through different stat views");
-    menus.push_back(toolsMenu);
-
-    // Options menu
-    Menu optionsMenu("Options");
-    optionsMenu.addItem("Save Game", []()
-                        {
-        save_Config("ecocity.cfg");
-        draw_Message("Game settings saved to ecocity.cfg"); }, BuildingType::None, "Save game settings");
-    optionsMenu.addItem("Load Game", []()
-                        {
-        if (load_Config("ecocity.cfg")) {
-            draw_Message("Game settings loaded from ecocity.cfg");
-        } else {
-            draw_Message("Could not load settings");
-        } }, BuildingType::None, "Load saved game settings");
-    optionsMenu.addItem("Toggle Sound", []()
-                        {
-        config.enableSounds = !config.enableSounds;
-        draw_Message(config.enableSounds ? "Sound enabled" : "Sound disabled"); }, BuildingType::None, "Turn game sounds on/off");
-    optionsMenu.addItem("Change Theme", []()
-                        {
-        config.uiTheme = (config.uiTheme + 1) % 4;
-        draw_Message("Theme changed to " + to_string(config.uiTheme)); }, BuildingType::None, "Cycle through UI themes");
-    menus.push_back(optionsMenu);
-
-    // Calculate tab positions
-    rebuild_TabPositions();
-}
-
-// Calculate tab positions
-void rebuild_TabPositions()
-{
-    int pos = 1;
-    for (auto &menu : menus)
-    {
-        menu.tabPos = pos;
-        menu.tabWidth = menu.name.length() + 2;
-        pos += menu.tabWidth + config.menuSpacing;
-    }
-}
-
-// Draw all menus
-void draw_Menu()
-{
-    // Clear menu area
-    for (int i = menuRow; i < menuRow + maxDropdownItems + 2; i++)
-    {
-        cout << "\033[" << i << ";1H" << string(80, ' ');
-    }
-
-    // Draw all menus
-    for (auto &menu : menus)
-    {
-        menu.draw();
-    }
-}
-
-// Process menu clicks
-bool handle_Menu_Click(int x, int y)
-{
-    // Check if click is on menu row (tabs)
-    if (y == menuRow)
-    {
-        for (int i = 0; i < menus.size(); i++)
-        {
-            if (x >= menus[i].tabPos && x < menus[i].tabPos + menus[i].tabWidth)
-            {
-                // Toggle this menu
-                if (activeMenu == i)
-                {
-                    menus[i].toggleVisibility();
-                    if (!menus[i].visible)
-                        activeMenu = -1;
-                }
-                else
-                {
-                    // Close previous menu
-                    if (activeMenu >= 0)
-                        menus[activeMenu].visible = false;
-
-                    // Open this menu
-                    menus[i].visible = true;
-                    activeMenu = i;
-                }
-
-                play_Sound(0); // Click sound
-                draw_Menu();
-                return true;
-            }
-        }
-    }
-    // Check if click is on dropdown item
-    else if (activeMenu >= 0 && menus[activeMenu].visible)
-    {
-        int itemIndex = y - menuRow - 1;
-        if (itemIndex >= 0 && itemIndex < menus[activeMenu].items.size() &&
-            x >= menus[activeMenu].tabPos && x < menus[activeMenu].tabPos + 17) // 17 = width of dropdown item
-        {
-            // Execute the action
-            menus[activeMenu].items[itemIndex].action();
-
-            // Update the current tool info
-            BuildingType bt = menus[activeMenu].items[itemIndex].buildingType;
-            if (bt != BuildingType::None)
-            {
-                draw_Message("Selected tool: " + menus[activeMenu].items[itemIndex].label);
-            }
-
-            // Close the menu
-            menus[activeMenu].visible = false;
-            activeMenu = -1;
-            draw_Menu();
-            return true;
-        }
-    }
-
-    return false;
-}
-
-// Handle menu hover
-void handle_Menu_Hover(int x, int y)
-{
-    if (activeMenu >= 0 && menus[activeMenu].visible)
-    {
-        int itemIndex = y - menuRow - 1;
-        if (itemIndex >= 0 && itemIndex < menus[activeMenu].items.size() &&
-            x >= menus[activeMenu].tabPos && x < menus[activeMenu].tabPos + 17)
-        {
-            if (menus[activeMenu].selectedItem != itemIndex)
-            {
-                menus[activeMenu].selectedItem = itemIndex;
-                menus[activeMenu].draw();
-            }
-        }
-    }
-}
-
-// Layout calculation
-void compute_UI_positions()
-{
-    // Calculate UI positions based on map size
-    menuRow = 1 + map_height + 3; // 3 rows after map (top border, map rows, bottom border)
-    menuCol = leftOffset;
-
-    statsRow = 2;                                         // Start stats at top
-    statsCol = leftOffset + (map_width * tileWidth) + 10; // Right of map
-
-    maxDropdownItems = 10; // Max items to show in dropdown
-
-    tooltipRow = menuRow + maxDropdownItems + 2; // Below dropdowns
-    messageRow = tooltipRow + 2;                 // Below tooltip
-
-    logRow = messageRow + 2; // Below message
-    logCol = leftOffset;
-}
-
-// Save/Load configuration
-void save_Config(const string &filename)
-{
-    ofstream file(filename);
-    if (!file)
-    {
-        draw_Message("Error: Could not open file for saving");
-        return;
-    }
-
-    file << config.monthLengthSeconds << endl;
-    file << config.startingMoney << endl;
-    file << config.startingPopulation << endl;
-    file << config.leftOffset << endl;
-    file << config.mapWidth << endl;
-    file << config.mapHeight << endl;
-    file << config.tileWidth << endl;
-    file << config.menuSpacing << endl;
-    file << config.enableSounds << endl;
-    file << config.uiTheme << endl;
-    file << config.fontHeight << endl;
-    file << config.fontName << endl;
-
-    file.close();
-}
-
-bool load_Config(const string &filename)
-{
-    ifstream file(filename);
-    if (!file)
-    {
-        draw_Message("Error: Could not open file for loading");
-        return false;
-    }
-
-    string line;
-
-    if (getline(file, line))
-        config.monthLengthSeconds = stoi(line);
-    if (getline(file, line))
-        config.startingMoney = stoi(line);
-    if (getline(file, line))
-        config.startingPopulation = stoi(line);
-    if (getline(file, line))
-        config.leftOffset = stoi(line);
-    if (getline(file, line))
-        config.mapWidth = stoi(line);
-    if (getline(file, line))
-        config.mapHeight = stoi(line);
-    if (getline(file, line))
-        config.tileWidth = stoi(line);
-    if (getline(file, line))
-        config.menuSpacing = stoi(line);
-    if (getline(file, line))
-        config.enableSounds = stoi(line);
-    if (getline(file, line))
-        config.uiTheme = stoi(line);
-    if (getline(file, line))
-        config.fontHeight = stoi(line);
-    if (getline(file, line))
-        config.fontName = line;
-
-    // Update globals
-    leftOffset = config.leftOffset;
-    map_width = config.mapWidth;
-    map_height = config.mapHeight;
-    tileWidth = config.tileWidth;
-
-    // Reconfigure UI
-    compute_UI_positions();
-    rebuild_TabPositions();
-    emoji_Support(true);
-
-    file.close();
-    return true;
-}
-
-// Parse coordinates like "A1" into row, col
-bool parse_Coords(const string &input, int &row, int &col)
-{
-    if (input.length() < 2)
-        return false;
-
-    char rowChar = toupper(input[0]);
-    if (rowChar < 'A' || rowChar >= ('A' + map_height))
-        return false;
-
-    row = rowChar - 'A';
-
-    try
-    {
-        col = stoi(input.substr(1)) - 1;
-    }
-    catch (...)
-    {
-        return false;
-    }
-
-    if (col < 0 || col >= map_width)
-        return false;
-
-    return true;
-}
-
-// Main game loop
-void game_Loop()
-{
-    bool running = true;
-    string input;
-
-    while (running)
-    {
-        // Clear screen
-        clear_Screen();
-
-        // Update game state
-        city->timer.update();
-
-        // Display UI
-        city->display_Map();
-        city->draw_Stats();
-        draw_Menu();
-        city->draw_Log();
-
-        // Show cursor position prompt
-        cout << "\033[" << (menuRow + maxDropdownItems + 5) << ";1H";
-        cout << "Enter coordinates (like A1) or command, 'help' for help, 'quit' to exit: ";
-
-        // Get input
-        getline(cin, input);
-
-        // Process commands
-        if (input == "quit" || input == "exit")
-        {
-            running = false;
-        }
-        else if (input == "help")
-        {
-            draw_Message("Commands: quit, help, build <type> <coords>, demolish <coords>, stats");
-        }
-        else if (input == "stats")
-        {
-            city->statsDisplayMode = (city->statsDisplayMode % 3) + 1;
-            city->draw_Stats();
-        }
-        else if (input.substr(0, 5) == "build" && input.length() > 6)
-        {
-            // Parse build command: build <type> <coords>
-            stringstream ss(input.substr(6));
-            string type, coords;
-            ss >> type >> coords;
-
-            int row, col;
-            if (parse_Coords(coords, row, col))
-            {
-                BuildingType bt = BuildingType::None;
-
-                if (type == "road")
-                    bt = BuildingType::Road;
-                else if (type == "house" || type == "residential")
-                    bt = BuildingType::Residential;
-                else if (type == "office" || type == "commercial")
-                    bt = BuildingType::Commercial;
-                else if (type == "factory" || type == "industrial")
-                    bt = BuildingType::Industrial;
-                else if (type == "hospital")
-                    bt = BuildingType::Hospital;
-                else if (type == "school")
-                    bt = BuildingType::School;
-                else if (type == "park")
-                    bt = BuildingType::Park;
-                else if (type == "tree")
-                    bt = BuildingType::Tree;
-                else if (type == "solar")
-                    bt = BuildingType::SolarPlant;
-                else if (type == "wind")
-                    bt = BuildingType::WindTurbine;
-                else if (type == "water")
-                    bt = BuildingType::WaterTreatment;
-                else if (type == "recycle")
-                    bt = BuildingType::RecyclingCenter;
-                else if (type == "fire")
-                    bt = BuildingType::FireStation;
-                else if (type == "police")
-                    bt = BuildingType::PoliceStation;
-
-                if (bt != BuildingType::None)
-                {
-                    if (city->placeBuilding(row, col, bt))
-                    {
-                        draw_Message("Building constructed at " + coords);
-                    }
-                }
-                else
-                {
-                    draw_Message("Unknown building type: " + type);
-                }
-            }
-            else
-            {
-                draw_Message("Invalid coordinates: " + coords);
-            }
-        }
-        else if (input.substr(0, 8) == "demolish" && input.length() > 9)
-        {
-            // Parse demolish command: demolish <coords>
-            string coords = input.substr(9);
-
-            int row, col;
-            if (parse_Coords(coords, row, col))
-            {
-                if (city->removeBuilding(row, col))
-                {
-                    draw_Message("Building demolished at " + coords);
-                }
-                else
-                {
-                    draw_Message("No building at " + coords);
-                }
-            }
-            else
-            {
-                draw_Message("Invalid coordinates: " + coords);
-            }
-        }
-        else
-        {
-            // Check if input is coordinates
-            int row, col;
-            if (parse_Coords(input, row, col))
-            {
-                if (city->currentTool == BuildingType::None)
-                {
-                    // Select the tile
-                    city->selectedRow = row;
-                    city->selectedCol = col;
-                    city->hasSelection = true;
-
-                    // Show info about the tile
-                    if (city->map[row][col].building)
-                    {
-                        string buildingName;
-                        switch (city->map[row][col].building->type)
-                        {
-                        case BuildingType::Road:
-                            buildingName = "Road";
-                            break;
-                        case BuildingType::Residential:
-                            buildingName = "House";
-                            break;
-                        case BuildingType::Commercial:
-                            buildingName = "Office";
-                            break;
-                        case BuildingType::Industrial:
-                            buildingName = "Factory";
-                            break;
-                        case BuildingType::Hospital:
-                            buildingName = "Hospital";
-                            break;
-                        case BuildingType::School:
-                            buildingName = "School";
-                            break;
-                        case BuildingType::Park:
-                            buildingName = "Park";
-                            break;
-                        case BuildingType::Tree:
-                            buildingName = "Tree";
-                            break;
-                        case BuildingType::SolarPlant:
-                            buildingName = "Solar Plant";
-                            break;
-                        case BuildingType::WindTurbine:
-                            buildingName = "Wind Turbine";
-                            break;
-                        case BuildingType::Airport:
-                            buildingName = "Airport";
-                            break;
-                        case BuildingType::WaterTreatment:
-                            buildingName = "Water Treatment";
-                            break;
-                        case BuildingType::RecyclingCenter:
-                            buildingName = "Recycling Center";
-                            break;
-                        case BuildingType::FireStation:
-                            buildingName = "Fire Station";
-                            break;
-                        case BuildingType::PoliceStation:
-                            buildingName = "Police Station";
-                            break;
-                        default:
-                            buildingName = "Unknown Building";
-                            break;
-                        }
-                        draw_Message(buildingName + " at " + input);
-                    }
-                    else
-                    {
-                        draw_Message(city->map[row][col].type + " at " + input);
-                    }
-                }
-                else
-                {
-                    // Build with current tool
-                    // Build with current tool
-                    if (city->placeBuilding(row, col, city->currentTool))
-                    {
-                        draw_Message("Building constructed at " + input);
-                    }
-                }
-            }
-            else
-            {
-                draw_Message("Invalid input: " + input);
-            }
-        }
-    }
-}
 
 // Mouse input handler
 void handle_Mouse_Input(int x, int y, bool isClick)
@@ -1808,10 +1079,10 @@ void handle_Mouse_Input(int x, int y, bool isClick)
                 city->hasSelection = true;
 
                 // Show info about the tile
-                if (city->map[row][col].building)
+                if (city->map[row][col]->building)
                 {
                     string buildingName;
-                    switch (city->map[row][col].building->type)
+                    switch (city->map[row][col]->building->type)
                     {
                     case BuildingType::Road:
                         buildingName = "Road";
@@ -1866,7 +1137,7 @@ void handle_Mouse_Input(int x, int y, bool isClick)
                 }
                 else
                 {
-                    draw_Message(city->map[row][col].type + " at " + char('A' + row) + to_string(col + 1));
+                    draw_Message(city->map[row][col]->type + " at " + char('A' + row) + to_string(col + 1));
                 }
             }
             else
@@ -1885,10 +1156,10 @@ void handle_Mouse_Input(int x, int y, bool isClick)
             cout << "\033[" << tooltipRow << ";1H" << ITALIC
                  << "Position: " << char('A' + row) << (col + 1);
 
-            if (city->map[row][col].building)
+            if (city->map[row][col]->building)
             {
                 string buildingName;
-                switch (city->map[row][col].building->type)
+                switch (city->map[row][col]->building->type)
                 {
                 case BuildingType::Road:
                     buildingName = "Road";
@@ -1943,7 +1214,7 @@ void handle_Mouse_Input(int x, int y, bool isClick)
             }
             else
             {
-                cout << " - " << city->map[row][col].type << RESET;
+                cout << " - " << city->map[row][col]->type << RESET;
             }
         }
     }
@@ -1971,6 +1242,145 @@ void handle_Mouse_Input(int x, int y, bool isClick)
     }
 }
 
+// Handle clicks on menu items
+bool handle_Menu_Click(int x, int y)
+{
+    // Implementation of menu click handler
+    // Check each menu item to see if it was clicked
+    for (Menu& menu : menus)
+    {
+        for (MenuItem& item : menu.items)
+        {
+            if (x >= item.x && x < item.x + item.width &&
+                y >= item.y && y < item.y + 1)
+            {
+                // Handle the action for this menu item
+                if (item.action)
+                {
+                    item.action();
+                    return true;
+                }
+                else if (item.toolType != BuildingType::None)
+                {
+                    // Set the current tool
+                    city->currentTool = item.toolType;
+                    draw_Message("Selected " + item.label);
+                    play_Sound(0); // Click sound
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Handle hovering over menu items
+void handle_Menu_Hover(int x, int y)
+{
+    // Implementation of menu hover handler
+    // Check each menu item to see if mouse is hovering over it
+    for (Menu& menu : menus)
+    {
+        for (MenuItem& item : menu.items)
+        {
+            if (x >= item.x && x < item.x + item.width &&
+                y >= item.y && y < item.y + 1)
+            {
+                // Display tooltip for this menu item
+                cout << "\033[" << tooltipRow << ";1H" << string(80, ' '); // Clear line
+                cout << "\033[" << tooltipRow << ";1H" << ITALIC << item.tooltip << RESET;
+                return;
+            }
+        }
+    }
+}
+
+// Game loop function
+void game_Loop()
+{
+    bool running = true;
+    int mouseX = 0, mouseY = 0;
+    bool mouseClicked = false;
+
+    // Main game loop
+    while (running)
+    {
+        // Process input
+        if (_kbhit())
+        {
+            int key = _getch();
+            if (key == 27) // ESC key
+            {
+                running = false;
+            }
+            else if (key == 's' || key == 'S')
+            {
+                // Save game
+                save_Config("eco_city_save.txt");
+                draw_Message("Game saved!");
+            }
+            else if (key == 'l' || key == 'L')
+            {
+                // Load game
+                if (load_Config("eco_city_save.txt"))
+                {
+                    draw_Message("Game loaded!");
+                }
+                else
+                {
+                    draw_Message("Could not load save file!");
+                }
+            }
+            // Add other key handlers here
+        }
+
+        // Check for mouse input
+        HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+        INPUT_RECORD ir[128];
+        DWORD events;
+        
+        if (PeekConsoleInput(hInput, ir, 128, &events) && events > 0)
+        {
+            ReadConsoleInput(hInput, ir, events, &events);
+            
+            for (DWORD i = 0; i < events; i++)
+            {
+                if (ir[i].EventType == MOUSE_EVENT)
+                {
+                    MOUSE_EVENT_RECORD mer = ir[i].Event.MouseEvent;
+                    
+                    // Update mouse position
+                    mouseX = mer.dwMousePosition.X;
+                    mouseY = mer.dwMousePosition.Y;
+                    
+                    // Check for mouse clicks
+                    if (mer.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED)
+                    {
+                        mouseClicked = true;
+                    }
+                    else
+                    {
+                        mouseClicked = false;
+                    }
+                    
+                    // Handle mouse input
+                    handle_Mouse_Input(mouseX, mouseY, mouseClicked);
+                }
+            }
+        }
+
+        // Update game state
+        city->timer->update();
+
+        // Redraw
+        city->display_Map();
+        draw_Menu();
+        
+        // Limit frame rate
+        this_thread::sleep_for(chrono::milliseconds(50));
+    }
+}
+
 void setup_Terminal()
 {
     // enable ANSI processing on Windows console
@@ -1984,7 +1394,7 @@ void setup_Terminal()
 void reset_Terminal()
 {
     // restore default console mode if you changed it
-    // (you can leave this empty if you don’t need special teardown)
+    // (you can leave this empty if you don't need special teardown)
 }
 
 // Initialize the game
@@ -2041,18 +1451,21 @@ void cleanup_Game()
     reset_Terminal();
 }
 
+// Message display function
+void draw_Message(const string &msg)
+{
+    cout << "\033[" << messageRow << ";1H" << string(80, ' '); // Clear line
+    cout << "\033[" << messageRow << ";1H" << BOLD << msg << RESET;
+}
+
 // Main entry point
 int main()
 {
     // Initialize
     init_Game();
 
-
-
     game_Loop();
 
-
-    
     cleanup_Game();
 
     cout << "Thanks for playing EcoCity!" << endl;

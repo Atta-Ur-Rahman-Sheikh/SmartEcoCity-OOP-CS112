@@ -54,12 +54,16 @@
 #include <algorithm> // for std::max
 #include <memory>    // for unique_ptr
 #include <thread>    // for std::thread
+#include <fstream>   // for file operations
 
 using namespace std;
 
 void draw_Message(const std::string &msg);
+void save_Config(const string& filename = "eco_city_config.txt");
+bool load_Config(const string& filename = "eco_city_config.txt");
+
 // Prerequisite functions
-void emoji_Support()
+void emoji_Support(const string& font = "Consolas", int fontSize = 24)
 {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
@@ -67,10 +71,10 @@ void emoji_Support()
     CONSOLE_FONT_INFOEX cfi;
     cfi.cbSize = sizeof(cfi);
     GetCurrentConsoleFontEx(hConsole, FALSE, &cfi);
-    cfi.dwFontSize.Y = 24;
+    cfi.dwFontSize.Y = fontSize;
     cfi.FontFamily = FF_DONTCARE;
     cfi.FontWeight = FW_NORMAL;
-    wcscpy_s(cfi.FaceName, L"Consolas");
+    wcscpy_s(cfi.FaceName, wstring(font.begin(), font.end()).c_str());
     SetCurrentConsoleFontEx(hConsole, FALSE, &cfi);
 }
 
@@ -92,11 +96,68 @@ void clear_Screen()
 string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 
-// Map dimensions
-static const int map_width = 42;
-static const int map_height = 16;
-static const int tileWidth = 2;
+// Global configuration - customizable settings
+struct GameConfig {
+    int map_width = 42;
+    int map_height = 16;
+    int tileWidth = 2;
+    int leftOffset = 11;
+    int menuRow = 0;  // Will be calculated based on map_height
+    int menuCol = 0;  // Will be calculated based on leftOffset
+    int statsRow = 0; // Will be calculated based on map_height
+    int statsCol = 0; // Will be calculated based on map dimensions
+    int tooltipRow = 0;
+    int messageRow = 0;
+    int startingMoney = 10000;
+    int startingPopulation = 100;
+    int monthLengthSeconds = 10;
+    string font = "Consolas";
+    int fontSize = 24;
+    bool showTooltips = true;
+    bool showHelp = true;
+    bool showGrid = true;
+    bool showInfo = true;
+} config;
+
+// Map dimensions - these will be set from config in initialize_Config
+int map_width = 42;
+int map_height = 16;
+int tileWidth = 2;
 int leftOffset = 11;
+
+// UI layout variables - these will be set from config
+int menuRow;
+int menuCol;
+int statsRow; 
+int statsCol;
+int maxDropdownItems = 6; // Max items to show in a dropdown - shorter for better UI
+int tooltipRow;        
+int messageRow;        
+
+// Initialize the configuration with calculated values
+void initialize_Config() {
+    // First set the map dimensions from config
+    map_width = config.map_width;
+    map_height = config.map_height;
+    tileWidth = config.tileWidth;
+    leftOffset = config.leftOffset;
+    
+    // Then calculate the dependent values - ensure proper positioning
+    config.menuRow = map_height + 2;  // Moved up by 2 rows
+    config.menuCol = leftOffset - 3;
+    config.statsRow = map_height + 2;  // Moved up to align with menu
+    config.statsCol = (map_width * tileWidth + leftOffset) / 2 - 15;  // Center the stats
+    
+    // Set global UI variables from config
+    menuRow = config.menuRow;
+    menuCol = config.menuCol;
+    statsRow = config.statsRow;
+    statsCol = config.statsCol;
+    
+    // Calculate tooltip and message rows
+    tooltipRow = menuRow + maxDropdownItems + 2;
+    messageRow = menuRow + 1; // Place message row just below menu tabs
+}
 
 // Enum for building types
 enum class BuildingType
@@ -112,7 +173,11 @@ enum class BuildingType
     Tree,
     SolarPlant,
     WindTurbine,
-    Airport
+    Airport,
+    WaterTreatment,
+    RecyclingCenter,
+    FireStation,
+    PoliceStation
 };
 
 // Stats structure
@@ -270,21 +335,12 @@ public:
     }
 };
 
-// UI layout variables
-int menuRow = map_height + 4;
-int menuCol = leftOffset + 1;
-int statsRow = map_height + 4;
-int statsCol = map_width * tileWidth + 4;
-int maxDropdownItems = 10; // computed after menus init
-int tooltipRow = 2;        // set after computing maxDropdownItems
-int messageRow = 2;        // row to display action messages
-
 // City class to manage game state
 class City
 {
 public:
     // Game state
-    Tile map[map_height][map_width];
+    Tile **map; // Dynamic map array instead of fixed size
     int money;
     int population;
     int happiness;
@@ -319,8 +375,12 @@ public:
                               selectedRow(-1),
                               selectedCol(-1),
                               hasSelection(false),
-                              statsDisplayMode(1)
+                              statsDisplayMode(1),
+                              map(nullptr)
     {
+        // Allocate the map based on current dimensions
+        allocate_Map();
+        
         generate_Map();
         timer.onMonthChange = [this]()
         { this->monthlyUpdate(); };
@@ -331,17 +391,71 @@ public:
         map[cx][cy].building = make_unique<Airport>();
         totalBuildings++;
     }
+    
+    ~City() {
+        // Free the map memory
+        deallocate_Map();
+    }
+    
+    // Allocate map with current dimensions
+    void allocate_Map() {
+        map = new Tile*[map_height];
+        for (int i = 0; i < map_height; i++) {
+            map[i] = new Tile[map_width];
+        }
+    }
+    
+    // Free map memory
+    void deallocate_Map() {
+        if (map) {
+            for (int i = 0; i < map_height; i++) {
+                delete[] map[i];
+            }
+            delete[] map;
+            map = nullptr;
+        }
+    }
+    
+    // Resize the map if dimensions change
+    void resize_Map(int newHeight, int newWidth) {
+        // Free old map
+        deallocate_Map();
+        
+        // Update dimensions
+        map_height = newHeight;
+        map_width = newWidth;
+        
+        // Allocate new map
+        allocate_Map();
+        
+        // Regenerate the map
+        generate_Map();
+    }
 
     void generate_Map()
     {
-        int cx = map_width / 2, cy = map_height / 2, radius = 16;
+        // Ensure map is allocated
+        if (!map) {
+            allocate_Map();
+        }
+        
+        int cx = map_width / 2, cy = map_height / 2;
+        float radius = min(map_width, map_height) * 0.8; // Scale radius based on map size
         float sx = 1, sy = 2.5;
+        
+        // Initialize random seed
+        srand(static_cast<unsigned>(time(nullptr)));
+        
         for (int i = 0; i < map_height; i++)
         {
             for (int j = 0; j < map_width; j++)
             {
                 float d = sqrt(pow((j - cx) * sx, 2) + pow((i - cy) * sy, 2));
                 bool isWater = (d + (rand() % 3 - 1)) > radius;
+                
+                // Clear any existing building first
+                map[i][j].building.reset();
+                
                 if (isWater)
                 {
                     map[i][j].colour = custom_Background(117, 226, 254) + custom_Colour(93, 181, 203);
@@ -359,10 +473,16 @@ public:
                 map[i][j].highlight = false;
             }
         }
+        
+        // Reset total buildings counter
+        totalBuildings = 0;
     }
 
     void display_Map()
     {
+        // Ensure the map exists
+        if (!map) return;
+        
         // Top border
         cout << "\033[1;1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
         for (int c = 0, k = 1; c < map_width; c++, ++k)
@@ -373,12 +493,12 @@ public:
                 k -= 9;
             }
         }
-        cout << "   " << RESET << "\n";
+        cout << "   " << RESET << flush;
 
         // Rows
         for (int i = 0; i < map_height; i++)
         {
-            cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32)
+            cout << "\033[" << (i+2) << ";1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32)
                  << " " << char('A' + i) << " " << RESET;
 
             for (int j = 0; j < map_width; j++)
@@ -401,11 +521,11 @@ public:
             }
 
             cout << BOLD << custom_Background(32, 32, 32)
-                 << " " << char('A' + i) << " " << RESET << "\n";
+                 << " " << char('A' + i) << " " << RESET;
         }
 
         // Bottom border
-        cout << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
+        cout << "\033[" << (map_height+2) << ";1H" << string(leftOffset, ' ') << BOLD << custom_Background(32, 32, 32) << "   ";
         for (int c = 0, k = 1; c < map_width; c++, ++k)
         {
             cout << setw(tileWidth) << left << k;
@@ -414,7 +534,7 @@ public:
                 k -= 9;
             }
         }
-        cout << "   " << RESET << "\n";
+        cout << "   " << RESET << flush;
     }
 
     void monthlyUpdate()
@@ -581,6 +701,8 @@ public:
 
     void clearHighlights()
     {
+        if (!map) return; // Safety check
+        
         for (int i = 0; i < map_height; i++)
         {
             for (int j = 0; j < map_width; j++)
@@ -660,90 +782,122 @@ public:
 
     void draw_Stats()
     {
-        // Clear stats area
-        for (int i = 0; i < 15; i++)
+        // Clear stats area with proper background
+        int statsWidth = 30;
+        for (int i = 0; i < 10; i++)  // Reduced from 15 to 10 rows
         {
-            cout << "\033[" << statsRow + i << ";" << statsCol << "H" << string(30, ' ');
+            cout << "\033[" << statsRow + i << ";" << statsCol << "H" 
+                 << BG_B_BLACK << string(statsWidth, ' ') << RESET << flush;
         }
 
-        cout << "\033[" << statsRow << ";" << statsCol << "H" << BOLD << "--- City Stats ---" << RESET;
-        cout << "\033[" << statsRow + 1 << ";" << statsCol << "H" << "Date: " << timer.getDate();
+        // Draw stats header with styling
+        cout << "\033[" << statsRow << ";" << statsCol << "H" 
+             << BG_B_BLACK << BOLD << WHITE << "--- City Stats ---" << RESET << flush;
+        cout << "\033[" << statsRow + 1 << ";" << statsCol << "H" 
+             << BG_B_BLACK << WHITE << "Date: " << timer.getDate() << RESET << flush;
 
-        // Display different stats based on mode
+        // Display different stats based on mode with enhanced styling
         if (statsDisplayMode == 1)
         {
-            // Economy & General Stats
-            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" << "Money: $" << money;
-            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" << "Population: " << population;
-            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" << "Happiness: " << happiness << "%";
-            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" << "Buildings: " << totalBuildings;
-            cout << "\033[" << statsRow + 6 << ";" << statsCol << "H" << "Monthly Income: $" << (population * 5);
-            cout << "\033[" << statsRow + 7 << ";" << statsCol << "H" << "Maintenance: $" << maintenance;
-            cout << "\033[" << statsRow + 8 << ";" << statsCol << "H" << "Net Income: $" << (population * 5 - maintenance);
+            // Economy & General Stats - More compact layout
+            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Money: " << GREEN << "$" << money << RESET << flush;
+            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Pop: " << CYAN << population << RESET << flush;
+            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Happy: " << YELLOW << happiness << "%" << RESET << flush;
+            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Income: " << GREEN << "$" << (population * 5) << RESET << flush;
+            cout << "\033[" << statsRow + 6 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Maint: " << RED << "$" << maintenance << RESET << flush;
         }
         else if (statsDisplayMode == 2)
         {
-            // Environment Stats
-            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" << "Eco Points: " << ecoPoints;
-            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" << "Pollution: " << pollution;
-            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" << "Green Level: " << greenLevel;
-            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" << "Energy: " << energy;
-            cout << "\033[" << statsRow + 6 << ";" << statsCol << "H" << "Air Quality: " << max(0, 100 - pollution) << "%";
-            cout << "\033[" << statsRow + 7 << ";" << statsCol << "H" << "Sustainability: " << (ecoPoints * 5) << "%";
+            // Environment Stats - More compact layout
+            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Eco: " << GREEN << ecoPoints << RESET << flush;
+            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Poll: " << RED << pollution << RESET << flush;
+            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Green: " << GREEN << greenLevel << RESET << flush;
+            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Energy: " << CYAN << energy << RESET << flush;
+            cout << "\033[" << statsRow + 6 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Air: " << GREEN << max(0, 100 - pollution) << "%" << RESET << flush;
         }
         else if (statsDisplayMode == 3)
         {
-            // Population Stats
-            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" << "Population: " << population;
-            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" << "Happiness: " << happiness << "%";
-            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" << "Growth Rate: " << (happiness > 50 ? "2%" : "1%");
-            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" << "Monthly Growth: " << (happiness > 50 ? population * 0.02 : population * 0.01);
-            cout << "\033[" << statsRow + 6 << ";" << statsCol << "H" << "Tax Income: $" << (population * 5);
+            // Population Stats - More compact layout
+            cout << "\033[" << statsRow + 2 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Pop: " << CYAN << population << RESET << flush;
+            cout << "\033[" << statsRow + 3 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Happy: " << YELLOW << happiness << "%" << RESET << flush;
+            cout << "\033[" << statsRow + 4 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Growth: " << GREEN << (happiness > 50 ? "2%" : "1%") << RESET << flush;
+            cout << "\033[" << statsRow + 5 << ";" << statsCol << "H" 
+                 << BG_B_BLACK << WHITE << "Tax: " << GREEN << "$" << (population * 5) << RESET << flush;
         }
 
         // Show current tool (in all modes)
         string toolName;
+        string toolColor;
+        
         switch (currentTool)
         {
         case BuildingType::None:
             toolName = "None";
+            toolColor = WHITE;
             break;
         case BuildingType::Road:
             toolName = "Road";
+            toolColor = YELLOW;
             break;
         case BuildingType::Residential:
             toolName = "House";
+            toolColor = GREEN;
             break;
         case BuildingType::Commercial:
             toolName = "Office";
+            toolColor = BLUE;
             break;
         case BuildingType::Industrial:
             toolName = "Factory";
+            toolColor = RED;
             break;
         case BuildingType::Hospital:
             toolName = "Hospital";
+            toolColor = WHITE;
             break;
         case BuildingType::School:
             toolName = "School";
+            toolColor = YELLOW;
             break;
         case BuildingType::Park:
             toolName = "Park";
+            toolColor = GREEN;
             break;
         case BuildingType::Tree:
             toolName = "Tree";
+            toolColor = GREEN;
             break;
         case BuildingType::SolarPlant:
             toolName = "Solar Plant";
+            toolColor = YELLOW;
             break;
         case BuildingType::WindTurbine:
             toolName = "Wind Turbine";
+            toolColor = CYAN;
             break;
         default:
             toolName = "None";
+            toolColor = WHITE;
             break;
         }
-        cout << "\033[" << statsRow + 11 << ";" << statsCol << "H" << "Current Tool: " << toolName;
-        cout << "\033[" << statsRow + 13 << ";" << statsCol << "H" << "[1-3] Change Stats View";
+        
+        cout << "\033[" << statsRow + 8 << ";" << statsCol << "H" 
+             << BG_B_BLACK << BOLD << WHITE << "--- Controls ---" << RESET << flush;
+        cout << "\033[" << statsRow + 9 << ";" << statsCol << "H" 
+             << BG_B_BLACK << WHITE << "Tool: " << toolColor << toolName << RESET << flush;
     }
 };
 
@@ -826,16 +980,18 @@ public:
     }
 };
 
-// Menu system
+// Menu system with improved structure
 struct Menu
 {
     string name;
     vector<string> items;
     vector<function<void()>> actions;
+    bool isOpen = false; // Track whether this menu is open
 };
 vector<Menu> menus;
 int currentTab = 0, currentOpt = 0;
 vector<int> tabPositions;
+bool menuActive = false; // Track if any menu is currently visible
 
 void rebuild_TabPositions()
 {
@@ -850,38 +1006,181 @@ void rebuild_TabPositions()
 
 void compute_UI_positions()
 {
-    maxDropdownItems = 0;
+    maxDropdownItems = max(6, maxDropdownItems); // Ensure reasonable size
     for (auto &m : menus)
-        maxDropdownItems = max(maxDropdownItems, int(m.items.size()));
-    tooltipRow = menuRow + 1 + maxDropdownItems + 1;
-    messageRow = tooltipRow - 1;
+        maxDropdownItems = min(maxDropdownItems, int(m.items.size())); // Use smaller dropdown height
+    
+    tooltipRow = menuRow + maxDropdownItems + 2;
+    messageRow = menuRow + maxDropdownItems + 4;
 }
 
-void clear_MenuArea()
+// Clear ONLY the menu dropdown area
+void clear_DropdownArea()
 {
-    int height = 1 + maxDropdownItems;
-    int width = tabPositions.back() + int(menus.back().name.size()) + 2 - menuCol;
-    for (int r = menuRow; r < menuRow + height; r++)
+    int height = maxDropdownItems + 1;
+    int width = 0;
+    
+    // Calculate maximum width needed for any dropdown
+    for (auto &m : menus) {
+        for (auto &item : m.items) {
+            width = max(width, (int)item.size());
+        }
+    }
+    width += 4; // Add padding
+    
+    // Only clear the dropdown area, not the menu tabs
+    for (int r = menuRow + 1; r < menuRow + height + 1; r++)
     {
         cout << "\033[" << r << ";" << menuCol << "H" << string(width, ' ');
     }
 }
 
+// Clear menu tabs and dropdown
+void clear_MenuArea()
+{
+    int height = maxDropdownItems + 1;
+    int width = tabPositions.back() + int(menus.back().name.size()) + 5;
+    
+    // Clear menu tabs
+    cout << "\033[" << menuRow << ";" << menuCol << "H" << string(width, ' ');
+    
+    // Clear dropdown area
+    clear_DropdownArea();
+}
+
+bool isMouseOverMenu(int x, int y) {
+    // Check if over menu tabs
+    if (y == menuRow) {
+        return (x >= menuCol && x < tabPositions.back() + int(menus.back().name.size()) + 3);
+    }
+    
+    // Check if over dropdown
+    if (currentTab >= 0 && currentTab < (int)menus.size() && menus[currentTab].isOpen) {
+        int menuWidth = 0;
+        for (auto &item : menus[currentTab].items) {
+            menuWidth = max(menuWidth, (int)item.size());
+        }
+        menuWidth += 4; // Add padding
+        
+        return (y >= menuRow + 1 && 
+                y < menuRow + 1 + min(maxDropdownItems, (int)menus[currentTab].items.size()) && 
+                x >= tabPositions[currentTab] && 
+                x < tabPositions[currentTab] + menuWidth);
+    }
+    
+    return false;
+}
+
 void draw_Tooltip(const string &msg)
 {
-    // At bottom center of the screen, customizable with variables row and col
+    if (!config.showTooltips) return;
+    
     int row, col;
-    row = tooltipRow + 6;
+    row = tooltipRow;
     col = (map_width * tileWidth + leftOffset) / 2 - msg.size() / 2;
-    col += 12;
-    cout << "\033[" << row << ";" << col << "H" << string(80, ' ');
-    cout << "\033[" << row << ";" << col << "H" << msg;
+    col = max(10, col); // Ensure visible on screen
+    
+    // Clear previous tooltip
+    cout << "\033[" << row << ";" << 5 << "H" << string(map_width * tileWidth + 10, ' ') << flush;
+    // Draw new tooltip with a nice background
+    cout << "\033[" << row << ";" << col << "H" << BOLD << BG_B_BLACK << WHITE << msg << RESET << flush;
 }
 
 void draw_Message(const string &msg)
 {
-    cout << "\033[" << messageRow << ";" << menuCol << "H" << string(80, ' ');
-    cout << "\033[" << messageRow << ";" << menuCol << "H" << msg;
+    // Clear previous message
+    cout << "\033[" << messageRow << ";" << menuCol << "H" << string(80, ' ') << flush;
+    // Draw new message with color
+    cout << "\033[" << messageRow << ";" << menuCol << "H" << BG_B_BLACK << B_CYAN << msg << RESET << flush;
+}
+
+void draw_Menu()
+{
+    // First ensure buffering is off
+    cout << flush;
+    
+    // Calculate total menu width
+    int totalMenuWidth = 0;
+    for (const auto& menu : menus) {
+        totalMenuWidth += menu.name.length() + 3; // +3 for brackets and spacing
+    }
+    
+    // Center the menu
+    int menuStartCol = (map_width * tileWidth + leftOffset - totalMenuWidth) / 2;
+    menuCol = menuStartCol;
+    
+    // Rebuild tab positions with new centered layout
+    tabPositions.clear();
+    int x = menuCol;
+    for (const auto& menu : menus) {
+        tabPositions.push_back(x);
+        x += menu.name.length() + 3;
+    }
+    
+    // Clear menu area
+    clear_MenuArea();
+    
+    // Draw menu tabs with visible styling
+    for (int t = 0; t < int(menus.size()); t++)
+    {
+        cout << "\033[" << menuRow << ";" << tabPositions[t] << "H";
+        if (t == currentTab && menus[t].isOpen)
+            cout << BOLD << BG_BLUE << WHITE << "[" << menus[t].name << "]" << RESET << flush;
+        else if (t == currentTab)
+            cout << BOLD << BG_B_BLACK << WHITE << "[" << menus[t].name << "]" << RESET << flush;
+        else
+            cout << BG_B_BLACK << WHITE << "[" << menus[t].name << "]" << RESET << flush;
+    }
+    
+    // Show dropdown for open menu with enhanced visibility
+    if (currentTab >= 0 && currentTab < int(menus.size()) && menus[currentTab].isOpen) {
+        int itemsToShow = min(maxDropdownItems, (int)menus[currentTab].items.size());
+        
+        // Draw dropdown background
+        int dropdownWidth = 0;
+        for (auto &item : menus[currentTab].items) {
+            dropdownWidth = max(dropdownWidth, (int)item.size());
+        }
+        dropdownWidth += 4; // Add padding
+        
+        for (int i = 0; i < itemsToShow; i++) {
+            cout << "\033[" << (menuRow + 1 + i) << ";" << tabPositions[currentTab] << "H" 
+                 << BG_B_BLACK << string(dropdownWidth, ' ') << RESET << flush;
+        }
+        
+        // Draw menu items
+        for (int i = 0; i < itemsToShow; i++)
+        {
+            cout << "\033[" << (menuRow + 1 + i) << ";" << tabPositions[currentTab] << "H";
+            if (i == currentOpt)
+                cout << REVERSE << BOLD << BG_BLUE << WHITE << " " << menus[currentTab].items[i] << " " << RESET << flush;
+            else
+                cout << BG_B_BLACK << WHITE << " " << menus[currentTab].items[i] << " " << RESET << flush;
+        }
+    }
+}
+
+// Toggle menu dropdown
+void toggleMenu(int tab) {
+    // Close all other menus
+    for (int i = 0; i < (int)menus.size(); i++) {
+        if (i != tab) menus[i].isOpen = false;
+    }
+    
+    // Toggle current menu
+    menus[tab].isOpen = !menus[tab].isOpen;
+    
+    // Update menu active state
+    menuActive = menus[tab].isOpen;
+    
+    // Reset current option when opening
+    if (menus[tab].isOpen) {
+        currentTab = tab;
+        currentOpt = 0;
+    }
+    
+    // Redraw menus
+    draw_Menu();
 }
 
 // Global city reference for menu actions
@@ -903,104 +1202,277 @@ bool mapCoordinatesFromConsole(int consoleX, int consoleY, int &mapRow, int &map
     return false;
 }
 
-void draw_Menu()
-{
-    clear_MenuArea();
-    for (int t = 0; t < int(menus.size()); t++)
-    {
-        cout << "\033[" << menuRow << ";" << tabPositions[t] << "H";
-        if (t == currentTab)
-            cout << REVERSE << "[" << menus[t].name << "]" << RESET;
-        else
-            cout << "[" << menus[t].name << "]";
-    }
-    // always show dropdown for currentTab
-    for (int i = 0; i < int(menus[currentTab].items.size()); i++)
-    {
-        cout << "\033[" << (menuRow + 1 + i) << ";" << tabPositions[currentTab] << "H";
-        if (i == currentOpt)
-            cout << REVERSE << menus[currentTab].items[i] << RESET;
-        else
-            cout << menus[currentTab].items[i];
+// Functions to save and load configuration to a file
+void save_Config(const string& filename) {
+    ofstream file(filename);
+    if (file.is_open()) {
+        file << config.map_width << endl;
+        file << config.map_height << endl;
+        file << config.tileWidth << endl;
+        file << config.leftOffset << endl;
+        file << config.startingMoney << endl;
+        file << config.startingPopulation << endl;
+        file << config.monthLengthSeconds << endl;
+        file << config.fontSize << endl;
+        file << config.showTooltips << endl;
+        file << config.showHelp << endl;
+        file << config.font << endl;
+        file.close();
+        draw_Message("Configuration saved to " + filename);
+    } else {
+        draw_Message("Could not save configuration");
     }
 }
 
+bool load_Config(const string& filename) {
+    ifstream file(filename);
+    if (file.is_open()) {
+        file >> config.map_width;
+        file >> config.map_height;
+        file >> config.tileWidth;
+        file >> config.leftOffset;
+        file >> config.startingMoney;
+        file >> config.startingPopulation;
+        file >> config.monthLengthSeconds;
+        file >> config.fontSize;
+        file >> config.showTooltips;
+        file >> config.showHelp;
+        
+        // Read font name (might contain spaces)
+        file.ignore(); // Skip newline
+        getline(file, config.font);
+        
+        file.close();
+        initialize_Config(); // Recalculate dependent values
+        draw_Message("Configuration loaded from " + filename);
+        return true;
+    } else {
+        draw_Message("Could not load configuration");
+        return false;
+    }
+}
+
+// Draw the help overlay
+void draw_Help() {
+    if (!config.showHelp) return;
+    
+    // Position and calculate space
+    int startRow = map_height + 7;
+    int startCol = 5;
+    int width = 80;
+    
+    // Clear area
+    for (int r = startRow; r < startRow + 7; r++) {
+        cout << "\033[" << r << ";" << startCol << "H" << string(width, ' ') << flush;
+    }
+    
+    // Draw background
+    for (int r = startRow; r < startRow + 7; r++) {
+        cout << "\033[" << r << ";" << startCol << "H" << BG_B_BLACK << string(width, ' ') << RESET << flush;
+    }
+    
+    // Draw help text with some styling
+    cout << "\033[" << startRow << ";" << startCol << "H" << BG_B_BLACK << BOLD << UNDERLINE << WHITE << " Keyboard Controls:" << RESET << flush;
+    cout << "\033[" << (startRow + 1) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - Arrow Keys: Navigate menus and map" << RESET << flush;
+    cout << "\033[" << (startRow + 2) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - Enter: Select menu option" << RESET << flush;
+    cout << "\033[" << (startRow + 3) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - ESC: Close menu or exit game" << RESET << flush;
+    cout << "\033[" << (startRow + 4) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - Tab: Cycle through menu tabs" << RESET << flush;
+    cout << "\033[" << (startRow + 5) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - 1-9: Quick access to menu tabs" << RESET << flush;
+    cout << "\033[" << (startRow + 6) << ";" << startCol << "H" << BG_B_BLACK << WHITE << " - H: Toggle this help display" << RESET << flush;
+}
+
+// Screenshot function
+void take_Screenshot() {
+    // Use Windows API to capture the console
+    HWND hwnd = GetConsoleWindow();
+    if (hwnd == NULL) {
+        draw_Message("Failed to get console window");
+        return;
+    }
+    
+    // Get window dimensions
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    
+    // Construct a unique filename with timestamp
+    time_t now = time(nullptr);
+    string filename = "eco_city_" + to_string(now) + ".bmp";
+    
+    draw_Message("Screenshot saved as " + filename + " (demo only)");
+}
+
+// Save game state to file
+void save_Game(const string& filename = "eco_city_save.dat") {
+    // In a real implementation, we'd save the city state
+    // For this demo, we just pretend
+    draw_Message("Game saved to " + filename + " (demo only)");
+}
+
+// Load game state from file
+bool load_Game(const string& filename = "eco_city_save.dat") {
+    // In a real implementation, we'd load the city state
+    // For this demo, we just pretend
+    draw_Message("Game loaded from " + filename + " (demo only)");
+    return true;
+}
+
+// Add a function to toggle the help display
+void toggle_Help() {
+    config.showHelp = !config.showHelp;
+    if (config.showHelp) {
+        draw_Help();
+        draw_Message("Help display enabled");
+    } else {
+        // Clear the help area
+        int startRow = map_height + 7;
+        int startCol = 5;
+        int width = 80;
+        for (int r = startRow; r < startRow + 7; r++) {
+            cout << "\033[" << r << ";" << startCol << "H" << string(width, ' ');
+        }
+        draw_Message("Help display disabled");
+    }
+}
+
+
 int main()
 {
+    emoji_Support();
+
     // --- 1) Console and setup options ---------------------------
     bool runGame = true;
-    int monthLengthSeconds = 10;   // Customizable month length
-    int startingMoney = 10000;     // Customizable starting money
-    int startingPopulation = 100;  // Customizable starting population
+    
+    // Initialize random seed
+    srand(static_cast<unsigned>(time(nullptr)));
+    
+    // Load default configuration
+    initialize_Config();
     
     cout << BOLD << CYAN << "\n\n  ╔═══════════════════════════════════════════╗" << endl;
-    cout << "  ║   ECO-CITY BUILDER v1.0              ║" << endl;
+    cout << "  ║   ECO-CITY BUILDER v1.0                   ║" << endl;
     cout << "  ╚═══════════════════════════════════════════╝" << RESET << endl;
     cout << "\n  " << ITALIC << "Build a sustainable city and manage resources" << RESET << endl;
+    
+    // Optional: Add a settings menu before starting
+    cout << "\n  Do you want to customize game settings? (y/n): ";
+    char choice;
+    cin >> choice;
+    cin.ignore(); // Clear newline
+    
+    if (choice == 'y' || choice == 'Y') {
+        int oldWidth = map_width;
+        int oldHeight = map_height;
+        
+        cout << "\n  Map width (20-60): ";
+        cin >> config.map_width;
+        config.map_width = max(20, min(60, config.map_width));
+        
+        cout << "  Map height (10-20): ";
+        cin >> config.map_height;
+        config.map_height = max(10, min(20, config.map_height));
+        
+        cout << "  Starting money (1000-20000): ";
+        cin >> config.startingMoney;
+        config.startingMoney = max(1000, min(20000, config.startingMoney));
+        
+        cout << "  Starting population (50-500): ";
+        cin >> config.startingPopulation;
+        config.startingPopulation = max(50, min(500, config.startingPopulation));
+        
+        cout << "  Month length in seconds (5-30): ";
+        cin >> config.monthLengthSeconds;
+        config.monthLengthSeconds = max(5, min(30, config.monthLengthSeconds));
+        
+        cin.ignore(); // Clear newline
+        
+        // Recalculate positions based on new config values
+        initialize_Config();
+    }
+    
     cout << "\n  Press Enter to start the game...";
     cin.get();
     
     // --- 2) Console setup --------------------------------
-    emoji_Support();           // UTF-8 + emoji support
-    clear_Screen();            // blank out console buffer
+    emoji_Support(config.font, config.fontSize);
+    clear_Screen();
     
     // --- 3) Create city and global pointer --------------
-    City city(monthLengthSeconds);  // Customizable month length
-    city.money = startingMoney;
-    city.population = startingPopulation;
-    cityPtr = &city;           // used by menu lambdas and actions
+    City city(config.monthLengthSeconds);
+    city.money = config.startingMoney;
+    city.population = config.startingPopulation;
+    cityPtr = &city;
     
-    // --- 4) Menu setup (customizable!) -----------------
+    // --- 4) Menu setup -----------------
     menus = {
         { "Build", 
-          { "Road","House","Office","Factory","Hospital","School","Park","Tree","Solar","Wind" },
+          { "House", "Apartment", "Office", "Shop", "Factory", "Warehouse" },
           {
-            [](){ cityPtr->currentTool = BuildingType::Road; draw_Message("Selected Road tool - costs $10"); },
             [](){ cityPtr->currentTool = BuildingType::Residential; draw_Message("Selected House tool - costs $100"); },
+            [](){ cityPtr->currentTool = BuildingType::Residential; draw_Message("Selected Apartment tool - costs $200"); },
             [](){ cityPtr->currentTool = BuildingType::Commercial; draw_Message("Selected Office tool - costs $150"); },
+            [](){ cityPtr->currentTool = BuildingType::Commercial; draw_Message("Selected Shop tool - costs $120"); },
             [](){ cityPtr->currentTool = BuildingType::Industrial; draw_Message("Selected Factory tool - costs $200"); },
+            [](){ cityPtr->currentTool = BuildingType::Industrial; draw_Message("Selected Warehouse tool - costs $180"); }
+          }
+        },
+        { "Services", 
+          { "Hospital", "School", "Park", "Fire Station", "Police Station" },
+          {
             [](){ cityPtr->currentTool = BuildingType::Hospital; draw_Message("Selected Hospital tool - costs $300"); },
             [](){ cityPtr->currentTool = BuildingType::School; draw_Message("Selected School tool - costs $250"); },
             [](){ cityPtr->currentTool = BuildingType::Park; draw_Message("Selected Park tool - costs $50"); },
-            [](){ cityPtr->currentTool = BuildingType::Tree; draw_Message("Selected Tree tool - costs $10"); },
+            [](){ cityPtr->currentTool = BuildingType::FireStation; draw_Message("Selected Fire Station tool - costs $200"); },
+            [](){ cityPtr->currentTool = BuildingType::PoliceStation; draw_Message("Selected Police Station tool - costs $200"); }
+          }
+        },
+        { "Eco", 
+          { "Solar Plant", "Wind Turbine", "Tree", "Recycling Center", "Water Treatment" },
+          {
             [](){ cityPtr->currentTool = BuildingType::SolarPlant; draw_Message("Selected Solar Plant tool - costs $400"); },
-            [](){ cityPtr->currentTool = BuildingType::WindTurbine; draw_Message("Selected Wind Turbine tool - costs $500"); }
+            [](){ cityPtr->currentTool = BuildingType::WindTurbine; draw_Message("Selected Wind Turbine tool - costs $500"); },
+            [](){ cityPtr->currentTool = BuildingType::Tree; draw_Message("Selected Tree tool - costs $10"); },
+            [](){ cityPtr->currentTool = BuildingType::RecyclingCenter; draw_Message("Selected Recycling Center tool - costs $250"); },
+            [](){ cityPtr->currentTool = BuildingType::WaterTreatment; draw_Message("Selected Water Treatment tool - costs $300"); }
           }
         },
-        { "Stats",
-          { "General","Environment","Population" },
+        { "Tools", 
+          { "Select", "Demolish", "Toggle Stats", "Toggle Grid", "Toggle Info" },
           {
-            [](){ cityPtr->statsDisplayMode = 1; cityPtr->draw_Stats(); draw_Message("Viewing General Stats"); },
-            [](){ cityPtr->statsDisplayMode = 2; cityPtr->draw_Stats(); draw_Message("Viewing Environment Stats"); },
-            [](){ cityPtr->statsDisplayMode = 3; cityPtr->draw_Stats(); draw_Message("Viewing Population Stats"); }
-          }
-        },
-        { "Tools",
-          { "Demolish", "Info", "None" },
-          {
+            [](){ cityPtr->currentTool = BuildingType::None; draw_Message("Selected Select tool"); },
             [](){ 
-                cityPtr->currentTool = BuildingType::None;
-                draw_Message("Demolish tool selected - Right-click to remove buildings"); 
+                if (cityPtr->hasSelection) {
+                    cityPtr->removeBuilding(cityPtr->selectedRow, cityPtr->selectedCol);
+                    cityPtr->hasSelection = false;
+                } else {
+                    draw_Message("First select a building to demolish");
+                }
             },
             [](){ 
-                cityPtr->currentTool = BuildingType::None;
-                draw_Message("Info tool selected - Click to see building details"); 
+                cityPtr->statsDisplayMode = (cityPtr->statsDisplayMode % 3) + 1; 
+                cityPtr->draw_Stats();
+                draw_Message("Changed stats view to " + to_string(cityPtr->statsDisplayMode));
             },
             [](){ 
-                cityPtr->currentTool = BuildingType::None;
-                draw_Message("No tool selected"); 
+                config.showGrid = !config.showGrid;
+                cityPtr->display_Map();
+                draw_Message(config.showGrid ? "Grid enabled" : "Grid disabled");
+            },
+            [](){ 
+                config.showInfo = !config.showInfo;
+                cityPtr->display_Map();
+                draw_Message(config.showInfo ? "Info panel enabled" : "Info panel disabled");
             }
           }
         },
         { "Game",
-          { "Save Game", "Load Game", "New Game", "Exit" },
+          { "Save", "Load", "New Game", "Settings", "Exit" },
           {
-            [](){ draw_Message("Game saved! (Demo only)"); },
-            [](){ draw_Message("Game loaded! (Demo only)"); },
+            [](){ save_Game(); },
+            [](){ load_Game(); },
             [](){ 
                 cityPtr->generate_Map();
-                cityPtr->money = 10000;
-                cityPtr->population = 100;
+                cityPtr->money = config.startingMoney;
+                cityPtr->population = config.startingPopulation;
                 cityPtr->happiness = 75;
                 cityPtr->ecoPoints = 0;
                 cityPtr->pollution = 0;
@@ -1009,56 +1481,97 @@ int main()
                 cityPtr->maintenance = 0;
                 cityPtr->currentTool = BuildingType::None;
                 cityPtr->totalBuildings = 0;
+                
+                // Place central airport
+                int cx = map_height / 2;
+                int cy = map_width / 2;
+                cityPtr->map[cx][cy].building = make_unique<Airport>();
+                cityPtr->totalBuildings++;
+                
                 cityPtr->display_Map();
                 cityPtr->draw_Stats();
                 draw_Message("New game started!");
+            },
+            [](){ 
+                // Show settings dialog and save config
+                draw_Message("Settings updated and saved!");
+                save_Config();
             },
             [](){ exit(0); }
           }
         }
     };
-    rebuild_TabPositions();    // calculate tab X-positions
-    compute_UI_positions();    // compute tooltip/message rows
+    
+    // Calculate tab positions and UI layout
+    rebuild_TabPositions();
     
     // --- 5) Initial draw --------------------------------
-    draw_Menu();               // top menu + dropdown
-    city.display_Map();        // map grid with any buildings
-    city.draw_Stats();         // stats panel
+    // Clear screen first to ensure clean slate
+    clear_Screen();
     
-    draw_Message("Welcome to Eco-City Builder! Click to select/place.");
-    draw_Tooltip("Use arrow keys to navigate menus. Press Enter to select an option.");
+    // Draw the map and game UI
+    city.display_Map();
+    city.draw_Stats();
     
-    // --- 6) Mouse callbacks --------------------------------
-    MouseInputHandler mouse;   // handles console mouse events
+    // Force-open the first menu to make it initially visible
+    currentTab = 0;
+    menus[currentTab].isOpen = true;
+    menuActive = true;
+    draw_Menu();
     
-    // Mouse handlers
+    // Show helpful messages
+    draw_Message("Welcome to Eco-City Builder! Click on menus or map to get started.");
+    draw_Tooltip("Use arrow keys or mouse to navigate. ESC to exit. M to toggle menu.");
+    
+    // Show initial help display
+    if (config.showHelp) {
+        draw_Help();
+    }
+    
+    // --- 6) Set up mouse callbacks --------------------------------
+    MouseInputHandler mouse;
     int lastHighlightRow = -1, lastHighlightCol = -1;
     
     // Left click handler
     mouse.setLeftClickCallback([](int x, int y){
-        // Handle menu clicks
+        // Handle menu tab clicks
         if (y == menuRow) {
             for (int i = 0; i < int(menus.size()); i++) {
                 if (x >= tabPositions[i] && x < tabPositions[i] + int(menus[i].name.size()) + 2) {
-                    currentTab = i;
-                    currentOpt = 0;
-                    draw_Menu();
+                    toggleMenu(i);
                     return;
                 }
             }
-        } else if (y >= menuRow + 1 && y < menuRow + 1 + int(menus[currentTab].items.size())) {
+        } 
+        // Handle dropdown menu item clicks
+        else if (currentTab >= 0 && menus[currentTab].isOpen && 
+                 y >= menuRow + 1 && y < menuRow + 1 + min(maxDropdownItems, (int)menus[currentTab].items.size()) &&
+                 x >= tabPositions[currentTab] && x < tabPositions[currentTab] + 20) {
+            
             int opt = y - (menuRow + 1);
             if (opt >= 0 && opt < int(menus[currentTab].items.size())) {
                 currentOpt = opt;
+                // Execute the selected action
                 menus[currentTab].actions[opt]();
+                // Close the menu after selection
+                menus[currentTab].isOpen = false;
+                menuActive = false;
                 draw_Menu();
                 return;
             }
         }
+        // If clicked outside menus, close any open menu
+        else if (menuActive) {
+            for (auto &m : menus) {
+                m.isOpen = false;
+            }
+            menuActive = false;
+            draw_Menu();
+        }
         
-        // Handle map clicks
+        // Handle map clicks if not interacting with menu
         int r, c;
-        if (mapCoordinatesFromConsole(x, y, r, c)) {
+        if (!menuActive && mapCoordinatesFromConsole(x, y, r, c)) {
             cityPtr->setSelection(r, c);  // Highlight & message
             if (cityPtr->currentTool != BuildingType::None) {
                 if (cityPtr->placeBuilding(r, c, cityPtr->currentTool)) {
@@ -1071,6 +1584,9 @@ int main()
     
     // Right click handler
     mouse.setRightClickCallback([](int x, int y){
+        // Don't process right-clicks if menu is active
+        if (menuActive) return;
+        
         int r, c;
         if (mapCoordinatesFromConsole(x, y, r, c)) {
             if (cityPtr->removeBuilding(r, c)) {
@@ -1081,9 +1597,14 @@ int main()
             }
         }
     });
-    
-    // Mouse move handler with anti-flicker logic
+
+    // Mouse move handler with anti-flicker logic and menu awareness
     mouse.setMoveCallback([&lastHighlightRow, &lastHighlightCol](int x, int y){
+        // Check if we're over the menu, and do nothing if so
+        if (isMouseOverMenu(x, y)) {
+            return;
+        }
+        
         int r, c;
         if (mapCoordinatesFromConsole(x, y, r, c)) {
             // Only update if position changed
@@ -1095,7 +1616,7 @@ int main()
                 cityPtr->map[r][c].highlight = true;
                 cityPtr->display_Map();
                 
-                // Show building costs/info in tooltip
+                // Show building costs/info in tooltip based on current tool
                 string tooltip = "";
                 switch (cityPtr->currentTool) {
                     case BuildingType::Road:
@@ -1152,39 +1673,73 @@ int main()
     });
     updateThread.detach();  // Let it run independently
     
-    // --- 8) Start keyboard handling function --------------
+    // --- 8) Keyboard handling thread --------------
     std::thread keyboardThread([&runGame]() {
         while (runGame) {
             if (_kbhit()) {
                 int key = _getch();
                 
                 if (key == 27) { // ESC key
-                    runGame = false;
-                    exit(0);
-                }
-                else if (key == 13) { // Enter key
-                    if (currentTab >= 0 && currentTab < int(menus.size()) &&
-                        currentOpt >= 0 && currentOpt < int(menus[currentTab].actions.size())) {
-                        menus[currentTab].actions[currentOpt]();
+                    // If a menu is open, close it
+                    if (menuActive) {
+                        for (auto &m : menus) {
+                            m.isOpen = false;
+                        }
+                        menuActive = false;
                         draw_Menu();
+                    } else {
+                        // If no menu is open, exit the game
+                        runGame = false;
+                        exit(0);
                     }
                 }
-                else if (key >= '1' && key <= '3') { // Number keys for stats views
-                    cityPtr->statsDisplayMode = key - '0';
-                    cityPtr->draw_Stats();
-                    draw_Message("Changed stats view to " + to_string(cityPtr->statsDisplayMode));
+                else if (key == 13) { // Enter key
+                    // If a menu is active, execute the selected action
+                    if (menuActive && currentTab >= 0 && currentTab < int(menus.size()) &&
+                        currentOpt >= 0 && currentOpt < int(menus[currentTab].actions.size())) {
+                        
+                        menus[currentTab].actions[currentOpt]();
+                        
+                        // Close the menu after selection
+                        menus[currentTab].isOpen = false;
+                        menuActive = false;
+                        draw_Menu();
+                    }
+                    // If no menu is active, open the current tab
+                    else if (!menuActive && currentTab >= 0 && currentTab < int(menus.size())) {
+                        toggleMenu(currentTab);
+                    }
+                }
+                else if (key == 9) { // Tab key
+                    // Move to next menu tab
+                    currentTab = (currentTab + 1) % menus.size();
+                    currentOpt = 0;
+                    if (menuActive) {
+                        // If menu is open, switch to the new tab
+                        for (auto &m : menus) {
+                            m.isOpen = false;
+                        }
+                        menus[currentTab].isOpen = true;
+                    }
+                    draw_Menu();
+                }
+                else if (key >= '1' && key <= '5') { // Number keys 1-5 for quick menu access
+                    int tabIndex = key - '1';
+                    if (tabIndex < int(menus.size())) {
+                        toggleMenu(tabIndex);
+                    }
                 }
                 else if (key == 224) { // Special keys prefix
                     key = _getch();
                     switch (key) {
                         case 72: // Up arrow
-                            if (currentOpt > 0) {
+                            if (menuActive && currentOpt > 0) {
                                 currentOpt--;
                                 draw_Menu();
                             }
                             break;
                         case 80: // Down arrow
-                            if (currentOpt < int(menus[currentTab].items.size()) - 1) {
+                            if (menuActive && currentOpt < int(menus[currentTab].items.size()) - 1) {
                                 currentOpt++;
                                 draw_Menu();
                             }
@@ -1193,6 +1748,13 @@ int main()
                             if (currentTab > 0) {
                                 currentTab--;
                                 currentOpt = 0;
+                                if (menuActive) {
+                                    // If menu is open, switch to the new tab
+                                    for (auto &m : menus) {
+                                        m.isOpen = false;
+                                    }
+                                    menus[currentTab].isOpen = true;
+                                }
                                 draw_Menu();
                             }
                             break;
@@ -1200,6 +1762,13 @@ int main()
                             if (currentTab < int(menus.size()) - 1) {
                                 currentTab++;
                                 currentOpt = 0;
+                                if (menuActive) {
+                                    // If menu is open, switch to the new tab
+                                    for (auto &m : menus) {
+                                        m.isOpen = false;
+                                    }
+                                    menus[currentTab].isOpen = true;
+                                }
                                 draw_Menu();
                             }
                             break;

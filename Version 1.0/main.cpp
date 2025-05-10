@@ -389,16 +389,33 @@ public:
     {
         if (state == 1)
         {
-            // Money, time, Eco Points, AI Knowledge,buildings,Mayor Level,
-            
+            // Money, time, Eco Points, AI Knowledge, buildings, Mayor Level
+            cout << "\n=== City Overview ===\n";
+            cout << "Money: $" << money << endl;
+            cout << "Time: " << month << "/" << year << endl;
+            cout << "Eco Points: " << ecoPoints << endl;
+            cout << "AI Knowledge: " << AIknowledge << endl;
+            cout << "Buildings: " << buildings << endl;
+            cout << "Mayor Level: " << mayorLevel << endl;
         }
         else if (state == 2)
         {
             // Carbon, Pollution, Green Coverage, Afforestation, Disaster Risk
+            cout << "\n=== Environmental Stats ===\n";
+            cout << "Carbon Level: " << carbon << endl;
+            cout << "Pollution: " << pollution << endl;
+            cout << "Green Coverage: " << greenCoverage << "%" << endl;
+            cout << "Afforestation: " << afforestation << "%" << endl;
+            cout << "Disaster Risk: " << disasterRisk << "%" << endl;
         }
         else if (state == 3)
         {
-            // Population, Happiness, Complaints, Tourism Rating,  
+            // Population, Happiness, Complaints, Tourism Rating
+            cout << "\n=== Social Stats ===\n";
+            cout << "Population: " << population << endl;
+            cout << "Happiness: " << happiness << "%" << endl;
+            cout << "Complaints: " << complaints << endl;
+            cout << "Tourism Rating: " << tourismRating << "/10" << endl;
         }
     }
 };

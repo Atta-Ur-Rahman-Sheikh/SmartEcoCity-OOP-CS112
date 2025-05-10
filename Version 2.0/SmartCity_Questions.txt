@@ -1,0 +1,10 @@
+Is digital infrastructure important for city growth?|Yes
+Should cities invest in autonomous vehicle technology?|Yes
+Are smart traffic management systems beneficial?|Yes
+Is citizen data privacy a concern for smart cities?|Yes
+Can smart buildings reduce energy consumption?|Yes
+Should public transportation be connected to a central system?|Yes
+Are IoT sensors useful for monitoring urban conditions?|Yes
+Is AI important for predicting city maintenance needs?|Yes
+Should citizens have digital access to government services?|Yes
+Can smart grids improve power distribution efficiency?|Yes 
