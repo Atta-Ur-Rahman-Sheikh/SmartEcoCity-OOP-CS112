@@ -1,0 +1,123 @@
+Main Menu:
+1.  Bank Account
+2.  Choose a Profession to Earn Money
+3.  Shop Essentials (Clothes, Groceries, Oil, etc.)
+4.  Play Games to Have Fun and Earn
+5.  Earn Through Competitions (Win to Earn Rewards)
+6.  Earn Money by Helping Others
+7.  Chat with Others
+8.  Construct Eco-Friendly Buildings
+9.  Manage Resources (Water, Energy, etc.)
+10. Simulate Traffic and Transportation
+11. Environmental Policies and Regulations
+12. Simulate Climate Change Effects
+13. Generate EcoCity Reports
+14. Exit
+Bank Account:
+1. View Account Balance
+2. Deposit Money
+3. Withdraw Money
+4. Apply for a Loan
+5. View Transaction History
+6. Back to Main Menu
+Choose a Profession to Earn Money:
+1.  Software Developer
+2.  Graphic Designer
+3.  Content Writer / Blogger
+4.  Electrician (Fix Electrical Systems)
+5.  Construction Worker / Mason
+6.  Digital Marketer
+7.  Freelance Photographer
+8.  Online Tutor
+9.  Delivery Rider
+10. Customer Support Agent
+11. Grocery Store Owner (Karyana Store)
+12. Clothing Store Owner
+13. Mobile Repair Technician
+14. Plumber
+15. Mechanic (Bike/Car Repair)
+16. Restaurant / Cafe Owner
+17. Barber / Hair Stylist
+18. Tailor / Stitching Expert
+19. Home Cleaner / Maid Service
+20. Doctor (Private Clinic)
+21. Engineer (Freelance / Consultant)
+22. Pharmacist (Medical Store Owner)
+23. Real Estate Agent
+24. Taxi / Ride App Driver
+25. Back to Main Menu
+Shop Essentials (Clothes, Groceries, Oil, etc.):
+1.  Buy Clothes (Shirts, Pants, Shoes, etc.)
+2.  Buy Groceries (Rice, Flour, Lentils, Spices, etc.)
+3.  Buy Cooking Oil / Ghee
+4.  Buy Fruits & Vegetables
+5.  Buy Milk, Bread & Eggs
+6.  Buy Cleaning Products (Soap, Detergents, etc.)
+7.  Buy Toiletries (Toothpaste, Shampoo, etc.)
+8.  Buy Medicines / First Aid Items
+9.  Buy Stationery (Notebooks, Pens, etc.)
+10. Buy Baby Products (Diapers, Milk, etc.)
+11. Buy Mobile Balance / Internet Packages
+12. Back to Main Menu
+Play Games to Have Fun and Earn:
+1. Chess Games
+2. Guess Games
+3. Math Games
+4. Back to Main Menu
+Earn Through Competitions (Win to Earn Rewards):
+1. Quiz Competition (General Knowledge)
+2. Code/Programming Challenge
+3. Essay Writing Contest
+4. Back to Main Menu
+Earn Money by Helping Others:
+1. Donate Blood (Earn Rewards)
+2. Volunteer at Animal Shelters
+3. Help with Elderly Care
+4. Teach Free Classes (Volunteer Teaching)
+5. Help Clean the Environment (Beach Cleanup, Park Cleanup, etc.)
+6. Back to Main Menu
+Construct Eco-Friendly Buildings:
+1. Solar-Powered Homes
+2. Green Buildings with Energy-Efficient Design
+3. Water-Efficient Buildings
+4. Recycled Materials Buildings
+5. Vertical Gardens & Green Roofs
+6. Back to Main Menu
+Manage Resources (Water, Energy, etc.):
+1. Monitor Water Usage
+2. Monitor Energy Consumption
+3. Install Water-Saving Devices
+4. Install Energy-Efficient Appliances
+5. Schedule Maintenance for Utilities
+6. Promote Resource Conservation Awareness
+7. Track Renewable Energy Generation
+8. Manage Waste and Recycling
+9. Back to Main Menu
+Simulate Traffic and Transportation:
+1. Public Transport Management
+2. Private Vehicle Traffic Simulation
+3. Pedestrian Traffic Flow Simulation
+4. Bicycle Lane Planning
+5. Electric Vehicle Integration
+6. Back to Main Menu
+Environmental Policies and Regulations:
+1. Energy Consumption Regulations
+2. Water Usage Restrictions
+3. Recycling and Waste Management Policies
+4. Carbon Emission Standards
+5. Biodiversity Conservation Laws
+6. Back to Main Menu
+Simulate Climate Change Effects:
+1. Sea Level Rise
+2. Temperature Variations
+3. Weather Pattern Changes
+4. Natural Disasters Simulation (Floods, Droughts, etc.)
+5. Pollution Levels Impact
+6. Back to Main Menu
+Generate EcoCity Reports:
+1. Monthly Environmental Report
+2. Energy Usage Statistics
+3. Resource Consumption Reports
+4. Traffic and Transportation Efficiency Report
+5. Climate Change Impact Report
+6. Back to Main Menu
