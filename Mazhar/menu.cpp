@@ -35,7 +35,7 @@ protected:
     }
 
     int extract_menu(const string& start, const string& end, string menu[]) {
-        ifstream file("C:/Users/Sicario/OneDrive/Desktop/Cpp Project/menu.txt");
+        ifstream file("menu.txt");
         if (!file) {
             cerr << "Error opening the file." << endl;
             return 0;
