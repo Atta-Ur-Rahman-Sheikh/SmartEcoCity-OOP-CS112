@@ -51,16 +51,25 @@
 #include <ctime>
 #include <vector>
 #include <functional>
-#include <algorithm> // for std::max and std::min
-#include <fstream>   // for file handling
+#include <algorithm>
+#include <fstream>   
 
 using namespace std;
+
+
+
+// NOTE:
+// AI was used for code organization, generating comments and using libraries like <windows.h> and <conio.h> etc.
+// AI was not used to generate any of the game logic, building types, upgrades, research projects, or any other game-related content.
+
+
+
 
 // Utility to build ANSI color codes
 string custom_Colour(int r, int g, int b) { return "\033[38;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 string custom_Background(int r, int g, int b) { return "\033[48;2;" + to_string(r) + ";" + to_string(g) + ";" + to_string(b) + "m"; }
 
-// CUSTOMIZATION VARIABLES - Modify these to change game behavior
+// CUSTOMIZATION VARIABLES
 struct VisualSettings
 {
     // Map appearance
@@ -73,8 +82,8 @@ struct VisualSettings
     int menuRow;         // Auto-calculated based on map height
     int menuCol;         // Auto-calculated based on left offset
     int statsRow;        // Auto-calculated based on map height
-    int statsCol;        // Now calculated dynamically based on menu width
-    int messageRow;      // Now calculated dynamically based on menu position
+    int statsCol;        
+    int messageRow;     
     int tabSpacing = 2;  // Spacing between tabs
     int statsWidth = 22; // Width of stats panel
     int maxRow = 33;     // Maximum row to prevent scrolling
@@ -84,11 +93,11 @@ struct VisualSettings
     {
         int row;                    // Will be calculated dynamically
         int col;                    // Same as menu column
-        int width = 120;             // Width of the message bar (increased from 80)
+        int width = 120;            
         int height = 2;             // Height of the message bar
-        bool showBorder = false;    // Show border around message bar
-        string currentContent = ""; // What's currently being displayed
-        string contentType = "";    // "tooltip", "building", "warning", or ""
+        bool showBorder = false;    
+        string currentContent = ""; 
+        string contentType = "";    
     } messageBar;
 
     // Menu layout customization
@@ -105,28 +114,28 @@ struct VisualSettings
     // Tooltip customization
     struct TooltipSettings
     {
-        int updateFrequency = 150;           // How often to change tooltips
-        string prefix = "Tip: ";             // Prefix for tooltip text
-        bool useBgColor = true;              // Use background color
-        int bgR = 0, bgG = 0, bgB = 255;     // Blue background
-        int fgR = 255, fgG = 255, fgB = 255; // White text
+        int updateFrequency = 150;           
+        string prefix = "Tip: ";            
+        bool useBgColor = true;             
+        int bgR = 0, bgG = 0, bgB = 255;     
+        int fgR = 255, fgG = 255, fgB = 255; 
     } tooltips;
 
     // Stats panel customization
     struct StatsSettings
     {
-        bool useBorders = true;  // Use box drawing characters for borders
-        int headerSpacing = 0;   // Space after headers
-        int sectionSpacing = 1;  // Space between sections
-        bool boldHeaders = true; // Use bold for headers
+        bool useBorders = true;  
+        int headerSpacing = 0;   
+        int sectionSpacing = 1; 
+        bool boldHeaders = true; 
     } statsPanel;
 
     // Building cursor customization
     struct CursorSettings
     {
-        string buildCursorSymbol = "[]";             // Symbol for build cursor
-        string removeCursorSymbol = "[]";            // Symbol for remove cursor
-        bool useColors = true;                       // Use colors for cursor
+        string buildCursorSymbol = "[]";            
+        string removeCursorSymbol = "[]";            
+        bool useColors = true;                       
         int buildR = 0, buildG = 255, buildB = 0;    // Green for build
         int removeR = 255, removeG = 0, removeB = 0; // Red for remove
     } cursor;
@@ -165,17 +174,6 @@ struct VisualSettings
         // messageRow will be calculated after computing maxDropdownItems
         // statsCol will be calculated later after tab positions are known
     }
-
-    // Flood settings
-    struct FloodSettings
-    {
-        bool floodingEnabled = true;          // Whether flooding can occur
-        int temperatureThreshold = 32;        // Temperature threshold for flooding
-        int outerLayersToFlood = 2;           // Number of outer layers to flood
-        int currentFloodLayer = 0;            // Current flood layer (0 = no flooding)
-        bool floodWarningIssued = false;      // Whether a flood warning has been issued
-        int floodWarningThreshold = 30;       // Temperature threshold for flood warning
-    } flood;
 } visual;
 
 struct GameSettings
@@ -186,60 +184,59 @@ struct GameSettings
     bool allowFloodingOfBuildings = true;
     
     // Environmental settings
-    int startingPollution = 10;
-    int startingTemperature = 25;
-    int startingForestCoverage = 50;
-    int pollutionIncreasePerFactory = 3;
-    int pollutionDecreasePerPark = 2;
+    int startingPollution = 15;       // Increased from 10 for more challenge
+    int startingTemperature = 23;     // Decreased from 25 to give more time before climate issues
+    int startingForestCoverage = 40;  // Decreased from 50 to encourage more forest planting
+    int pollutionIncreasePerFactory = 4; // Increased from 3 to make industrial buildings more impactful
+    int pollutionDecreasePerPark = 3;    // Increased from 2 to make forests more valuable
     
     // Time settings
     int startingYear = 2050;
     int cooldownTimeMs = 500;
-    float randomEventChance = 0.2f; // 20% chance per year
+    float randomEventChance = 0.25f; // Increased from 0.2 for more interesting gameplay
 } gameSettings;
 
 struct EconomySettings
 {
     // Starting resources
-    int startingFunds = 50000;
-    int startingPopulation = 1234;
-    int startingHappiness = 75;
+    int startingFunds = 4000;      
+    int startingPopulation = 1000; 
+    int startingHappiness = 70;     
     
     // Income and expenses
-    int baseYearlyRevenue = 500;
-    int baseYearlyExpenses = 300;
+    int baseYearlyRevenue = 600;   
+    int baseYearlyExpenses = 400;   
     
     // Building impacts
-    int populationPerHouse = 50;
-    int happinessPerPark = 5;
-    int happinessPenaltyPerFactory = 3;
+    int populationPerHouse = 60;    
+    int happinessPerPark = 6;     
+    int happinessPenaltyPerFactory = 4; 
     
     // Building income/costs
-    int factoryIncome = 200;
-    int shopIncome = 100;
-    int houseTax = 30;
-    int roadMaintenance = 5;
-    int buildingMaintenance = 10;
+    int factoryIncome = 250;        
+    int shopIncome = 120;       
+    int houseTax = 35;             
+    int roadMaintenance = 6;        
+    int buildingMaintenance = 12;   
     
     // Demolition
-    float buildingRefundPercentage = 0.5f; // 50% refund when removing buildings
+    float buildingRefundPercentage = 0.4f; // Decreased from 0.5f to make demolition decisions more meaningful
 } economy;
 
-// Map dimensions (using the customizable values)
-static const int map_width = 42;  // Default, will be set from visual.mapWidth
-static const int map_height = 16; // Default, will be set from visual.mapHeight
-static const int tileWidth = 2;   // Default, will be set from visual.tileWidthWidth of stats panel
-int leftOffset = 12;              // Default, will be set from visual.leftOffset
+// Map dimensions 
+static const int map_width = 42;  
+static const int map_height = 16; 
+static const int tileWidth = 2;  
+int leftOffset = 12;              
 
-// Define tile struct before using it
 struct tile
 {
     string texture, colour, type;
-    string building;  // Type of building on this tile
-    bool hasBuilding; // Flag to track if tile has a building
+    string building; 
+    bool hasBuilding; 
 };
 
-// Forward declarations for functions
+// Forward declarations
 void emoji_Support();
 void clear_Screen();
 void draw_Message(const string &msg);
@@ -248,7 +245,6 @@ void draw_Stats();
 void applyCustomSettings();
 void draw_BuildingDetails();
 
-// Forward declarations for the upgrade and research system
 bool hasUpgrade(const string& upgradeName);
 bool hasCategoryUpgrade(const string& category, int level);
 void purchaseUpgrade(int upgradeIndex);
@@ -257,17 +253,10 @@ void loadResearchQuestions(int researchIndex);
 void handleResearchQuestion(int researchIndex);
 void showSelectedItemDescription();
 
-// Forward declarations for detailed stats functions
 void display_EconomyStats();
 void display_EnvironmentStats();
 void display_PopulationStats();
 
-// Forward declarations for flooding functionality
-void checkForFlooding(tile map[map_height][map_width]);
-void floodMapLayer(tile map[map_height][map_width], int layer);
-bool isMapCoordInLayer(int row, int col, int layer);
-
-// Forward declarations for the time progression function
 void advanceYear(tile map[map_height][map_width]);
 void advanceResearch(tile map[map_height][map_width]);
 
@@ -276,7 +265,7 @@ int menuRow = map_height + 4;
 int menuCol = leftOffset;
 int statsRow = map_height + 6;
 int statsCol = tileWidth + 2;
-int maxDropdownItems = 6; // computed after menus init
+int maxDropdownItems = 6; 
 
 // Building system variables
 int cursorRow = 0, cursorCol = 0;
@@ -284,7 +273,6 @@ string selectedBuilding = "";
 bool buildMode = false;
 bool removeMode = false;
 
-// Building types and their properties
 struct BuildingType
 {
     string name;
@@ -295,17 +283,17 @@ struct BuildingType
 };
 
 vector<BuildingType> buildingTypes = {
-    {"Road", "==", custom_Colour(80, 80, 80) + custom_Background(150, 150, 150), 10, "Connects buildings and increases city efficiency"},
-    {"Residential", "🏠", custom_Colour(200, 100, 0) + custom_Background(131, 198, 105), 100, "Increases population with low carbon emissions"},
-    {"Commercial", "🏪", custom_Colour(100, 100, 200) + custom_Background(131, 198, 105), 150, "Increases income and tourism with medium carbon emissions"},
-    {"Industrial", "🏭", custom_Colour(100, 100, 100) + custom_Background(131, 198, 105), 300, "High income but decreases tourism and produces high pollution"},
-    {"Power", "⚡", custom_Colour(255, 215, 0) + custom_Background(131, 198, 105), 200, "Provides power to the city"},
-    {"Forest", "🌳", custom_Colour(0, 120, 0) + custom_Background(131, 198, 105), 50, "Reduces pollution and increases environment quality"},
-    {"Education", "🏫", custom_Colour(220, 220, 220) + custom_Background(131, 198, 105), 250, "Increases happiness in surrounding area"},
-    {"Hospital", "🏥", custom_Colour(255, 0, 0) + custom_Background(131, 198, 105), 300, "Provides healthcare and increases happiness in surrounding area"},
-    {"Police", "🚨", custom_Colour(0, 0, 255) + custom_Background(131, 198, 105), 250, "Increases safety and happiness in surrounding area"},
-    {"Entertainment", "🏰", custom_Colour(180, 50, 180) + custom_Background(131, 198, 105), 200, "Increases happiness and tourism in surrounding area"},
-    {"Airport", "✈️", custom_Colour(50, 50, 200) + custom_Background(150, 150, 150), 1000, "Main transportation hub"}};
+    {"Road", "==", custom_Colour(80, 80, 80) + custom_Background(150, 150, 150), 12, "Connects buildings and increases city efficiency"},
+    {"Residential", "🏠", custom_Colour(200, 100, 0) + custom_Background(131, 198, 105), 120, "Increases population with low carbon emissions"},
+    {"Commercial", "🏪", custom_Colour(100, 100, 200) + custom_Background(131, 198, 105), 180, "Increases income and tourism with medium carbon emissions"},
+    {"Industrial", "🏭", custom_Colour(100, 100, 100) + custom_Background(131, 198, 105), 350, "High income but decreases tourism and produces high pollution"},
+    {"Power", "⚡", custom_Colour(255, 215, 0) + custom_Background(131, 198, 105), 250, "Provides power to the city"},
+    {"Forest", "🌳", custom_Colour(0, 120, 0) + custom_Background(131, 198, 105), 60, "Reduces pollution and increases environment quality"},
+    {"Education", "🏫", custom_Colour(220, 220, 220) + custom_Background(131, 198, 105), 300, "Increases happiness in surrounding area"},
+    {"Hospital", "🏥", custom_Colour(255, 0, 0) + custom_Background(131, 198, 105), 350, "Provides healthcare and increases happiness in surrounding area"},
+    {"Police", "🚨", custom_Colour(0, 0, 255) + custom_Background(131, 198, 105), 280, "Increases safety and happiness in surrounding area"},
+    {"Entertainment", "🏰", custom_Colour(180, 50, 180) + custom_Background(131, 198, 105), 230, "Increases happiness and tourism in surrounding area"},
+    {"Airport", "✈️", custom_Colour(50, 50, 200) + custom_Background(150, 150, 150), 1200, "Main transportation hub"}};
 
 // Upgrade system structure
 struct Upgrade {
@@ -326,20 +314,20 @@ struct Upgrade {
 
 // List of available upgrades
 vector<Upgrade> upgrades = {
-    {"Residential Upgrade I", "Improves housing quality and capacity", 1000, false, "Residential", 1, 1.0, 0.0, 0.0, 1.2, 20},
-    {"Residential Upgrade II", "Advanced housing with smart technology", 2500, false, "Residential", 2, 1.2, 0.0, 0.0, 1.5, 50},
+    {"Residential Upgrade I", "Improves housing quality and capacity", 1200, false, "Residential", 1, 1.2, 0.0, 0.0, 1.2, 20},
+    {"Residential Upgrade II", "Advanced housing with smart technology", 3000, false, "Residential", 2, 1.5, 0.0, 0.0, 1.5, 50},
     
-    {"Commercial Upgrade I", "Enhanced shopping and business areas", 1200, false, "Commercial", 1, 1.25, 0.0, 0.0, 1.1, 0},
-    {"Commercial Upgrade II", "Modern shopping malls and office complexes", 3000, false, "Commercial", 2, 1.5, 0.0, 0.0, 1.2, 0},
+    {"Commercial Upgrade I", "Enhanced shopping and business areas", 1500, false, "Commercial", 1, 1.3, 0.0, 0.0, 1.1, 0},
+    {"Commercial Upgrade II", "Modern shopping malls and office complexes", 3500, false, "Commercial", 2, 1.6, 0.0, 0.0, 1.2, 0},
     
-    {"Industrial Upgrade I", "More efficient factories with reduced pollution", 1500, false, "Industrial", 1, 1.2, 0.0, 0.2, 0.0, 0},
-    {"Industrial Upgrade II", "Clean manufacturing technologies", 3500, false, "Industrial", 2, 1.5, 0.0, 0.4, 0.0, 0},
+    {"Industrial Upgrade I", "More efficient factories with reduced pollution", 1800, false, "Industrial", 1, 1.25, 0.0, 0.25, 0.0, 0},
+    {"Industrial Upgrade II", "Clean manufacturing technologies", 4000, false, "Industrial", 2, 1.6, 0.0, 0.5, 0.0, 0},
     
-    {"Development Upgrade I", "Improved public facilities", 1000, false, "Development", 1, 0.0, 0.1, 0.0, 1.3, 0},
-    {"Development Upgrade II", "Modern community centers and facilities", 2500, false, "Development", 2, 0.0, 0.2, 0.0, 1.6, 0},
+    {"Development Upgrade I", "Improved public facilities", 1200, false, "Development", 1, 0.0, 0.15, 0.0, 1.3, 0},
+    {"Development Upgrade II", "Modern community centers and facilities", 3000, false, "Development", 2, 0.0, 0.25, 0.0, 1.7, 0},
     
-    {"Power Upgrade I", "More efficient and cleaner power generation", 1200, false, "Power", 1, 0.0, 0.0, 0.15, 0.0, 0},
-    {"Power Upgrade II", "Renewable energy technologies", 3000, false, "Power", 2, 0.0, 0.0, 0.3, 0.0, 0}
+    {"Power Upgrade I", "More efficient and cleaner power generation", 1500, false, "Power", 1, 0.0, 0.0, 0.2, 0.0, 0},
+    {"Power Upgrade II", "Renewable energy technologies", 3500, false, "Power", 2, 0.0, 0.0, 0.4, 0.0, 0}
 };
 
 // Research system structure
@@ -373,20 +361,20 @@ struct Research {
 
 // List of research projects
 vector<Research> researchProjects = {
-    {"Smart City", "Develop smart infrastructure and digital technologies", 2000, false, 0, 100, 
+    {"Smart City", "Develop smart infrastructure and digital technologies", 2500, false, 0, 120, 
      "SmartCity_Questions.txt", false, 0, {}, {}, 0,
      0, 0, // correctAnswersCount, totalAnswersCount
-     {"Residential Upgrade II", "Commercial Upgrade II"}, {}, 1.2, 0.0, 1.1},
+     {"Residential Upgrade II", "Commercial Upgrade II"}, {}, 1.3, 0.0, 1.15},
      
-    {"Green City", "Research sustainable practices and green technologies", 2000, false, 0, 100, 
+    {"Green City", "Research sustainable practices and green technologies", 2500, false, 0, 120, 
      "GreenCity_Questions.txt", false, 0, {}, {}, 0,
      0, 0, // correctAnswersCount, totalAnswersCount
-     {"Industrial Upgrade II", "Power Upgrade II"}, {}, 0.0, 1.5, 1.2},
+     {"Industrial Upgrade II", "Power Upgrade II"}, {}, 0.0, 1.7, 1.25},
      
-    {"Sustainable City", "Develop comprehensive sustainability solutions", 3000, false, 0, 150, 
+    {"Sustainable City", "Develop comprehensive sustainability solutions", 4000, false, 0, 180, 
      "SustainableCity_Questions.txt", false, 0, {}, {}, 0,
      0, 0, // correctAnswersCount, totalAnswersCount
-     {"Development Upgrade II"}, {"Advanced Urban Planning", "Clean Transport"}, 1.3, 1.3, 1.3}
+     {"Development Upgrade II"}, {"Advanced Urban Planning", "Clean Transport"}, 1.4, 1.4, 1.4}
 };
 
 // Buildings that don't require road connections
@@ -397,7 +385,6 @@ int cityFunds = 5000;
 int population = 1234;
 int happiness = 75;
 
-// Time and environmental system
 int currentYear = 2050;
 int pollution = 10;       // 0-100 scale
 int temperature = 25;     // in Celsius
@@ -420,7 +407,10 @@ vector<ClimateEvent> climateEvents = {
     {"Heat Wave", "A heat wave has struck your city! Happiness decreased.", 0},
     {"Heavy Rain", "Heavy rainfall has occurred! Parks grow faster but roads need maintenance.", 1},
     {"Pollution Crisis", "Pollution levels have reached a critical point!", 2},
-    {"Economic Boom", "The economy is thriving! Extra revenue generated.", 3}};
+    {"Economic Boom", "The economy is thriving! Extra revenue generated.", 3},
+    {"Cold Snap", "A sudden cold snap has reduced power efficiency!", 2},  // Added new event
+    {"Tourism Surge", "A tourism surge has boosted commercial income!", 3} // Added new event
+};
 
 // Structures for tracking historical data
 struct EconomyHistory {
@@ -459,24 +449,42 @@ void applyClimateEvent(int eventType, tile map[map_height][map_width])
     switch (eventType)
     {
         case 0: // Heat Wave
-            happiness = max(0, happiness - 10);
-            temperature += 5;
+            happiness = max(0, happiness - 12);
+            temperature += 3;
             draw_Message("Heat Wave: Temperature increased to " + to_string(temperature) + "°C");
             break;
         case 1: // Heavy Rain
-            cityFunds -= 200;
-            forestCoverage += 5;
-            draw_Message("Heavy Rain: $200 spent on road maintenance");
+            cityFunds -= 250;
+            forestCoverage += 6;
+            draw_Message("Heavy Rain: $250 spent on road maintenance");
             break;
         case 2: // Pollution Crisis
             happiness = max(0, happiness - 15);
-            pollution += 20;
+            pollution += 15;
             draw_Message("Pollution Crisis: Pollution increased to " + to_string(pollution) + "%");
             break;
         case 3: // Economic Boom
-            cityFunds += 1000;
-            happiness += 10;
-            draw_Message("Economic Boom: $1000 added to city funds");
+            cityFunds += 1200;
+            happiness += 8;
+            draw_Message("Economic Boom: $1200 added to city funds");
+            break;
+        case 4: // Cold Snap (new)
+            temperature -= 5;
+            cityFunds -= 150;
+            draw_Message("Cold Snap: Temperature dropped to " + to_string(temperature) + "°C and increased heating costs!");
+            break;
+        case 5: // Tourism Surge (new)
+            int commercialCount = 0;
+            for (int i = 0; i < map_height; i++) {
+                for (int j = 0; j < map_width; j++) {
+                    if (map[i][j].hasBuilding && map[i][j].building == "Commercial")
+                        commercialCount++;
+                }
+            }
+            int bonus = commercialCount * 75;
+            cityFunds += bonus;
+            happiness += 5;
+            draw_Message("Tourism Surge: $" + to_string(bonus) + " additional income from " + to_string(commercialCount) + " commercial buildings!");
             break;
     }
 }
@@ -589,26 +597,21 @@ void generate_Map(tile map[map_height][map_width])
                                                      visual.colors.landForeground.b);
     map[airportRow][airportCol].texture = "  ";
     
-    // Place airport
     map[airportRow][airportCol].hasBuilding = true;
     map[airportRow][airportCol].building = "Airport";
     
-    // Add initial roads around the airport
     for (int dr = -1; dr <= 1; dr++)
     {
         for (int dc = -1; dc <= 1; dc++)
         {
-            // Skip the airport itself and diagonals
             if ((dr == 0 && dc == 0) || (abs(dr) == 1 && abs(dc) == 1))
                 continue;
             
             int r = airportRow + dr;
             int c = airportCol + dc;
             
-            // Ensure the coordinates are within bounds
             if (r >= 0 && r < map_height && c >= 0 && c < map_width)
             {
-                // Ensure the tile is land
                 map[r][c].type = "Land";
                 map[r][c].colour = custom_Background(visual.colors.landBackground.r, 
                                                     visual.colors.landBackground.g, 
@@ -1042,7 +1045,7 @@ void compute_UI_positions()
         dropdownLastRow += 1;
 
     // Position message bar right below the dropdown menu with a 1-row gap
-    visual.messageBar.row = dropdownLastRow + 1;
+    visual.messageBar.row = dropdownLastRow + 2;
     visual.messageBar.col = menuCol;
 
     // Calculate message bar width based on menu width
@@ -1058,8 +1061,8 @@ void compute_UI_positions()
 void clear_MenuArea()
 {
     // Calculate a generous area to clear
-    int height = maxDropdownItems + 5; // Add extra rows for safety
-    int width = 100;                   // Wide enough for all menu content
+    int height = maxDropdownItems + 15; // Add extra rows for safety
+    int width = 120;                   // Wide enough for all menu content
 
     // Clear the entire menu area including dropdown, respecting max row
     for (int r = menuRow; r < min(menuRow + height, visual.maxRow); r++)
@@ -1234,13 +1237,14 @@ void placeBuildingOnMap(tile map[map_height][map_width], int row, int col, const
         }
     }
     
-    // Apply cost reduction (simple version without full modifier system)
+    // Apply upgrade modifiers to building placement
+    float incomeMultiplier = 1.0;
     float costReduction = 0.0;
     float pollutionReduction = 0.0;
     float happinessBoost = 1.0;
     int populationBoost = 0;
     
-    // Check for applicable upgrades based on building type
+    // Calculate upgrade modifiers directly
     string category = "";
     if (buildingType == "Residential") category = "Residential";
     else if (buildingType == "Commercial") category = "Commercial";
@@ -1253,24 +1257,55 @@ void placeBuildingOnMap(tile map[map_height][map_width], int row, int col, const
     if (!category.empty()) {
         for (const auto& upgrade : upgrades) {
             if (upgrade.category == category && upgrade.purchased) {
+                incomeMultiplier *= (upgrade.incomeMultiplier > 0) ? upgrade.incomeMultiplier : 1.0;
                 costReduction += upgrade.costReductionFactor;
                 pollutionReduction += upgrade.pollutionReductionFactor;
                 happinessBoost *= (upgrade.happinessBoostFactor > 0) ? upgrade.happinessBoostFactor : 1.0;
                 populationBoost += upgrade.populationBoost;
             }
         }
+        
+        // Apply research effects as well to further enhance upgrades
+        for (const auto& research : researchProjects) {
+            if (research.unlocked && research.researchPoints >= research.requiredPoints) {
+                // Apply general boosts based on category
+                if (category == "Residential" || category == "Commercial") {
+                    incomeMultiplier *= (research.economyBoostFactor > 0) ? research.economyBoostFactor : 1.0;
+                }
+                
+                if (category == "Industrial" || category == "Power") {
+                    float additionalReduction = (1.0 - pollutionReduction) * 
+                                              ((research.environmentBoostFactor > 0) ? 
+                                              (research.environmentBoostFactor - 1.0) / research.environmentBoostFactor : 0.0);
+                    pollutionReduction += additionalReduction;
+                }
+                
+                happinessBoost *= (research.happinessBoostFactor > 0) ? research.happinessBoostFactor : 1.0;
+            }
+        }
+        
+        // Cap reductions at 0.9 (90%)
+        costReduction = min(costReduction, 0.9f);
+        pollutionReduction = min(pollutionReduction, 0.9f);
     }
     
-    // Apply the cost reduction (cap at 90%)
-    costReduction = min(costReduction, 0.9f);
+    // Apply the cost reduction
     if (costReduction > 0) {
+        int originalCost = cost;
         cost = int(cost * (1.0 - costReduction));
+        
+        // Show cost reduction message if significant
+        if (originalCost - cost >= 10) {
+            draw_Message("Upgrade applied: Cost reduced from $" + to_string(originalCost) + 
+                       " to $" + to_string(cost) + " (-" + to_string(int(costReduction * 100)) + "%)");
+            Sleep(1000); // Show message for a moment
+        }
     }
     
     // Check if enough funds
     if (cityFunds < cost)
     {
-        draw_Message("Not enough funds to build " + buildingType + "!");
+        draw_Message("Not enough funds to build " + buildingType + "! Need $" + to_string(cost));
         return;
     }
     
@@ -1299,21 +1334,56 @@ void placeBuildingOnMap(tile map[map_height][map_width], int row, int col, const
     
     // Effects of buildings with upgrade modifiers applied
     if (buildingType == "Residential")
-        population += economy.populationPerHouse + populationBoost;
+    {
+        int popIncrease = economy.populationPerHouse + populationBoost;
+        population += popIncrease;
+        
+        if (populationBoost > 0) {
+            draw_Message("Residential upgrade applied: +" + to_string(popIncrease) + " population");
+            Sleep(800); // Show message for a moment
+        }
+    }
     else if (buildingType == "Forest")
-        happiness = min(100, happiness + int(economy.happinessPerPark * happinessBoost));
+    {
+        int happinessIncrease = int(economy.happinessPerPark * happinessBoost);
+        happiness = min(100, happiness + happinessIncrease);
+        
+        if (happinessBoost > 1.0) {
+            draw_Message("Development upgrade applied: +" + to_string(happinessIncrease) + " happiness");
+            Sleep(800); // Show message for a moment
+        }
+    }
     else if (buildingType == "Industrial")
-        happiness = max(0, happiness - int(economy.happinessPenaltyPerFactory * (1.0 - pollutionReduction)));
+    {
+        int happinessDecrease = int(economy.happinessPenaltyPerFactory * (1.0 - pollutionReduction));
+        happiness = max(0, happiness - happinessDecrease);
+        
+        if (pollutionReduction > 0) {
+            draw_Message("Industrial upgrade applied: Reduced pollution impact by " + 
+                       to_string(int(pollutionReduction * 100)) + "%");
+            Sleep(800); // Show message for a moment
+        }
+    }
     else if (buildingType == "Commercial")
-        cityFunds += int(50 * happinessBoost); // Initial bonus
+    {
+        int bonusAmount = int(50 * incomeMultiplier);
+        cityFunds += bonusAmount;
+        
+        if (incomeMultiplier > 1.0) {
+            draw_Message("Commercial upgrade applied: Bonus increased to $" + to_string(bonusAmount));
+            Sleep(800); // Show message for a moment
+        }
+    }
     else if (buildingType == "Education" || buildingType == "Hospital" ||
               buildingType == "Police" || buildingType == "Entertainment")
     {
-        happiness = min(100, happiness + int(3 * happinessBoost)); // All development buildings increase happiness with boost
-    }
-    else if (buildingType == "Power")
-    {
-        // Power plant effect with potential pollution reduction
+        int happinessIncrease = int(3 * happinessBoost);
+        happiness = min(100, happiness + happinessIncrease);
+        
+        if (happinessBoost > 1.0) {
+            draw_Message("Development upgrade applied: +" + to_string(happinessIncrease) + " happiness");
+            Sleep(800); // Show message for a moment
+        }
     }
     
     draw_Message(buildingType + " built successfully!");
@@ -1582,7 +1652,23 @@ void handle_Input(tile map[map_height][map_width])
         else if (ch == 13)
         {
             // Execute the selected action
-            menus[currentTab].actions[currentOpt]();
+            // Check if it's the STATS tab
+            if (menus[currentTab].name == "STATS")
+            {
+                // Disable tooltips when showing stats
+                disable_Tooltips();
+                
+                // Execute the action and ensure it returns properly
+                menus[currentTab].actions[currentOpt]();
+                
+                // Re-enable tooltips
+                enable_Tooltips();
+            }
+            else
+            {
+                // Normal menu action execution
+                menus[currentTab].actions[currentOpt]();
+            }
         }
         else if (ch == 27)
         {
@@ -2114,31 +2200,33 @@ void getUpgradeModifiers(const string& buildingType, float& incomeMultiplier, fl
     // No upgrades for other building types
     if (category.empty()) return;
     
-    // Apply modifiers from purchased upgrades
+    // Apply modifiers from purchased upgrades - stack level 1 and 2 effects
     for (const auto& upgrade : upgrades) {
         if (upgrade.category == category && upgrade.purchased) {
-            incomeMultiplier *= upgrade.incomeMultiplier > 0 ? upgrade.incomeMultiplier : 1.0;
+            incomeMultiplier *= (upgrade.incomeMultiplier > 0) ? upgrade.incomeMultiplier : 1.0;
             costReduction += upgrade.costReductionFactor;
             pollutionReduction += upgrade.pollutionReductionFactor;
-            happinessBoost *= upgrade.happinessBoostFactor > 0 ? upgrade.happinessBoostFactor : 1.0;
+            happinessBoost *= (upgrade.happinessBoostFactor > 0) ? upgrade.happinessBoostFactor : 1.0;
             populationBoost += upgrade.populationBoost;
         }
     }
     
-    // Apply research effects as well
+    // Apply research effects as well to further enhance upgrades
     for (const auto& research : researchProjects) {
         if (research.unlocked && research.researchPoints >= research.requiredPoints) {
-            // Apply general boosts
+            // Apply general boosts based on category
             if (category == "Residential" || category == "Commercial") {
-                incomeMultiplier *= research.economyBoostFactor > 0 ? research.economyBoostFactor : 1.0;
+                incomeMultiplier *= (research.economyBoostFactor > 0) ? research.economyBoostFactor : 1.0;
             }
             
             if (category == "Industrial" || category == "Power") {
-                pollutionReduction += (1.0 - pollutionReduction) * (research.environmentBoostFactor > 0 ? 
-                                     (research.environmentBoostFactor - 1.0) / research.environmentBoostFactor : 0.0);
+                float additionalReduction = (1.0 - pollutionReduction) * 
+                                          ((research.environmentBoostFactor > 0) ? 
+                                          (research.environmentBoostFactor - 1.0) / research.environmentBoostFactor : 0.0);
+                pollutionReduction += additionalReduction;
             }
             
-            happinessBoost *= research.happinessBoostFactor > 0 ? research.happinessBoostFactor : 1.0;
+            happinessBoost *= (research.happinessBoostFactor > 0) ? research.happinessBoostFactor : 1.0;
         }
     }
     
@@ -2166,7 +2254,15 @@ void updateUpgradesMenu() {
     vector<string> level2Names = {"Residential Upgrade II", "Commercial Upgrade II", "Industrial Upgrade II", 
                                  "Development Upgrade II", "Power Upgrade II"};
     
-    // Check each upgrade and update menu if needed
+    // Find matching upgrade indices
+    vector<int> level1Indices = {0, 2, 4, 6, 8};  // Indices in upgrades array for level 1 upgrades
+    vector<int> level2Indices = {1, 3, 5, 7, 9};  // Indices in upgrades array for level 2 upgrades
+    
+    // Clear and rebuild menu actions
+    menus[upgradesMenuIndex].items.clear();
+    menus[upgradesMenuIndex].actions.clear();
+    
+    // Check each upgrade and update menu
     for (int i = 0; i < level1Names.size(); i++) {
         // Find if current level upgrade is purchased
         bool level1Purchased = false;
@@ -2177,29 +2273,26 @@ void updateUpgradesMenu() {
             }
         }
         
-        // If level 1 is purchased, replace with level 2 in the menu if available
+        // If level 1 is purchased, check for level 2
         if (level1Purchased) {
             // Find if level 2 upgrade is available (research completed)
             bool level2Available = false;
             bool level2Purchased = false;
-            int level2Index = -1;
             
-            for (int j = 0; j < upgrades.size(); j++) {
-                if (upgrades[j].name == level2Names[i]) {
-                    level2Index = j;
-                    
+            for (const auto& upgrade : upgrades) {
+                if (upgrade.name == level2Names[i]) {
                     // Check if this upgrade is unlocked by any completed research
                     for (const auto& research : researchProjects) {
                         if (research.unlocked && 
                             research.researchPoints >= research.requiredPoints &&
-                            find(research.unlocksUpgrades.begin(), research.unlocksUpgrades.end(), upgrades[j].name) 
+                            find(research.unlocksUpgrades.begin(), research.unlocksUpgrades.end(), upgrade.name) 
                             != research.unlocksUpgrades.end()) {
                             level2Available = true;
                         }
                     }
                     
                     // Check if already purchased
-                    if (upgrades[j].purchased) {
+                    if (upgrade.purchased) {
                         level2Purchased = true;
                     }
                     
@@ -2208,28 +2301,55 @@ void updateUpgradesMenu() {
             }
             
             // Update menu item and action
-            if (level2Available && !level2Purchased && level2Index >= 0) {
-                // Replace with level 2 upgrade
-                menus[upgradesMenuIndex].items[i] = level2Names[i];
+            if (level2Available && !level2Purchased) {
+                // Add level 2 upgrade to menu
+                menus[upgradesMenuIndex].items.push_back(level2Names[i]);
                 
-                // Update the action to purchase the level 2 upgrade - use captured index for safety
-                int capturedIndex = level2Index;
-                menus[upgradesMenuIndex].actions[i] = [capturedIndex]() { purchaseUpgrade(capturedIndex); };
+                // Use captured index for level 2
+                int capturedIndex = level2Indices[i];
+                menus[upgradesMenuIndex].actions.push_back([capturedIndex]() { purchaseUpgrade(capturedIndex); });
             } else if (level2Purchased) {
                 // Both levels purchased, show as completed
-                menus[upgradesMenuIndex].items[i] = level2Names[i] + " (Completed)";
-                menus[upgradesMenuIndex].actions[i] = []() { 
+                menus[upgradesMenuIndex].items.push_back(level2Names[i] + " (Completed)");
+                
+                // Add an empty action that shows a message
+                menus[upgradesMenuIndex].actions.push_back([]() { 
                     draw_Message("This upgrade has already been completed!"); 
-                };
+                });
             } else {
                 // Level 1 completed but level 2 not available yet
-                menus[upgradesMenuIndex].items[i] = level1Names[i] + " (Completed)";
-                menus[upgradesMenuIndex].actions[i] = []() { 
+                menus[upgradesMenuIndex].items.push_back(level1Names[i] + " (Completed)");
+                
+                // Add an action that explains the research requirement
+                menus[upgradesMenuIndex].actions.push_back([]() { 
                     draw_Message("This upgrade has been completed. Research needed for next level."); 
-                };
+                });
             }
+        } else {
+            // Level 1 not purchased, add to menu
+            menus[upgradesMenuIndex].items.push_back(level1Names[i]);
+            
+            // Use captured index for level 1
+            int capturedIndex = level1Indices[i];
+            menus[upgradesMenuIndex].actions.push_back([capturedIndex]() { purchaseUpgrade(capturedIndex); });
         }
     }
+    
+    // Ensure there's at least one option
+    if (menus[upgradesMenuIndex].items.empty()) {
+        menus[upgradesMenuIndex].items.push_back("All upgrades completed!");
+        menus[upgradesMenuIndex].actions.push_back([]() {
+            draw_Message("Congratulations! You've completed all available upgrades.");
+        });
+    }
+    
+    // Reset current option to 0 if it's out of bounds
+    if (currentTab == upgradesMenuIndex && currentOpt >= menus[upgradesMenuIndex].items.size()) {
+        currentOpt = 0;
+    }
+    
+    // Rebuild tab positions after menu changes
+    rebuild_TabPositions();
 }
 
 // Function to purchase an upgrade
@@ -2268,6 +2388,7 @@ void purchaseUpgrade(int upgradeIndex) {
         // Check if this upgrade requires research
         bool requiresResearch = false;
         bool researchCompleted = false;
+        string requiredResearch = "";
         
         for (const auto& research : researchProjects) {
             // Check if this upgrade is mentioned in research unlocks
@@ -2277,6 +2398,7 @@ void purchaseUpgrade(int upgradeIndex) {
             
             if (upgradeInUnlocks) {
                 requiresResearch = true;
+                requiredResearch = research.name;
                 
                 // Check if that research is completed
                 if (research.unlocked && research.researchPoints >= research.requiredPoints) {
@@ -2287,14 +2409,15 @@ void purchaseUpgrade(int upgradeIndex) {
         }
         
         if (requiresResearch && !researchCompleted) {
-            draw_Message("This upgrade requires specific research to be completed!");
+            draw_Message("This upgrade requires " + requiredResearch + " research to be completed!");
             return;
         }
     }
     
     // Check if player has enough funds
     if (cityFunds < selectedUpgrade.cost) {
-        draw_Message("Not enough funds to purchase " + selectedUpgrade.name + "!");
+        draw_Message("Not enough funds to purchase " + selectedUpgrade.name + "! Need $" + 
+                   to_string(selectedUpgrade.cost) + " (Have $" + to_string(cityFunds) + ")");
         return;
     }
     
@@ -2302,11 +2425,34 @@ void purchaseUpgrade(int upgradeIndex) {
     cityFunds -= selectedUpgrade.cost;
     selectedUpgrade.purchased = true;
     
+    // Display detailed information about the upgrade effects
+    string upgradeEffects = "";
+    
+    if (selectedUpgrade.incomeMultiplier > 1.0)
+        upgradeEffects += "Income +" + to_string(int((selectedUpgrade.incomeMultiplier - 1.0) * 100)) + "%, ";
+        
+    if (selectedUpgrade.costReductionFactor > 0)
+        upgradeEffects += "Building cost -" + to_string(int(selectedUpgrade.costReductionFactor * 100)) + "%, ";
+        
+    if (selectedUpgrade.pollutionReductionFactor > 0)
+        upgradeEffects += "Pollution -" + to_string(int(selectedUpgrade.pollutionReductionFactor * 100)) + "%, ";
+        
+    if (selectedUpgrade.happinessBoostFactor > 1.0)
+        upgradeEffects += "Happiness +" + to_string(int((selectedUpgrade.happinessBoostFactor - 1.0) * 100)) + "%, ";
+        
+    if (selectedUpgrade.populationBoost > 0)
+        upgradeEffects += "Population +" + to_string(selectedUpgrade.populationBoost) + " per house, ";
+    
+    // Remove trailing comma and space
+    if (upgradeEffects.length() > 2) {
+        upgradeEffects = upgradeEffects.substr(0, upgradeEffects.length() - 2);
+    }
+    
     // Apply immediate effects
     // Add an immediate happiness bonus for purchasing upgrades
     happiness = min(100, happiness + 5);
     
-    draw_Message("Purchased " + selectedUpgrade.name + "! " + selectedUpgrade.description);
+    draw_Message("Purchased " + selectedUpgrade.name + "! Effects: " + upgradeEffects);
     
     // Update menu to reflect the purchase
     updateUpgradesMenu();
@@ -2614,53 +2760,76 @@ void handleResearchQuestion(int researchIndex) {
     }
 }
 
-// Function to display Economic Statistics
+// Function to display Economy Statistics
 void display_EconomyStats() {
-    // Basic position parameters 
-    int displayRow = 10; // Start at a fixed row position
-    int displayCol = 15; // Fixed column position
+    const int statsWidth = 70;
     
-    // First clear the entire screen to ensure clean display
-    system("cls");
+    // Clear any previous messages and menus
+    clear_MenuArea();
+    display_MessageBar("", "");
     
-    // Print debug info at the top of the screen
-    cout << "ECONOMY STATS DEBUG INFO:" << endl;
-    cout << "Number of records: " << economyHistory.size() << endl;
-    cout << "Current Year: " << currentYear << endl;
-    cout << "Funds: " << cityFunds << endl;
-    cout << "Menu Row: " << menuRow << ", Menu Col: " << menuCol << endl;
-    cout << "Message Bar Row: " << visual.messageBar.row << endl << endl;
+    // Calculate display row to ensure it's visible
+    const int displayRow = menuRow + 3;
     
-    // Display title with bold yellow color
-    cout << BOLD << B_YELLOW << "ECONOMY STATISTICS" << RESET << endl << endl;
+    // Display title
+    std::cout << "\033[" << displayRow << ";" << menuCol << "H" << BOLD << B_YELLOW << "ECONOMY STATISTICS" << RESET;
     
-    // Display column headers
-    cout << BOLD << "Year  |  Funds  |  Income  |  Expenses  |  Com.  |  Ind." << RESET << endl;
-    cout << "-------------------------------------------------------" << endl;
+    // Display record count
+    std::cout << "\033[" << (displayRow + 1) << ";" << menuCol << "H" 
+              << "Records: " << economyHistory.size();
+    
+    // Define column widths for consistent alignment
+    const int yearWidth = 6;
+    const int fundsWidth = 12;
+    const int incomeWidth = 12;
+    const int expensesWidth = 12;
+    const int comWidth = 6;
+    const int indWidth = 6;
+    
+    // Display header with aligned columns
+    std::cout << "\033[" << (displayRow + 2) << ";" << menuCol << "H" 
+              << BOLD << setw(yearWidth) << left << "Year" << RESET << " | " 
+              << BOLD << setw(fundsWidth) << left << "Funds" << RESET << " | " 
+              << BOLD << setw(incomeWidth) << left << "Income" << RESET << " | " 
+              << BOLD << setw(expensesWidth) << left << "Expenses" << RESET << " | " 
+              << BOLD << setw(comWidth) << left << "Com." << RESET << " | " 
+              << BOLD << setw(indWidth) << left << "Ind." << RESET;
+    
+    // Display horizontal line
+    std::cout << "\033[" << (displayRow + 3) << ";" << menuCol << "H" << string(statsWidth, '-');
     
     // Display historical data (most recent at the top)
+    int row = displayRow + 4;
     if (economyHistory.empty()) {
-        cout << "No economic data available yet." << endl;
+        std::cout << "\033[" << row << ";" << menuCol << "H" << "No economic data available yet.";
+        row++;
     } else {
-        for (int i = economyHistory.size() - 1; i >= 0 && i >= (int)economyHistory.size() - 5; i--) {
+        for (int i = economyHistory.size() - 1; i >= 0; i--) {
             // Format each data point
-            cout << economyHistory[i].year << "  |  ";
-            cout << "$" << economyHistory[i].funds << "  |  ";
+            string year = to_string(economyHistory[i].year);
+            string funds = "$" + to_string(economyHistory[i].funds);
+            string income = "$" + to_string(economyHistory[i].yearlyIncome);
+            string expenses = "$" + to_string(economyHistory[i].yearlyExpenses);
+            string commercial = to_string(economyHistory[i].commercialCount);
+            string industrial = to_string(economyHistory[i].industrialCount);
             
-            if (economyHistory[i].yearlyIncome > economyHistory[i].yearlyExpenses) {
-                cout << GREEN << "$" << economyHistory[i].yearlyIncome << RESET << "  |  ";
-            } else {
-                cout << "$" << economyHistory[i].yearlyIncome << "  |  ";
-            }
+            // Color code income/expenses based on positive/negative net
+            string incomeColor = (economyHistory[i].yearlyIncome > economyHistory[i].yearlyExpenses) ? GREEN : "";
+            string expenseColor = (economyHistory[i].yearlyExpenses > economyHistory[i].yearlyIncome) ? RED : "";
             
-            if (economyHistory[i].yearlyExpenses > economyHistory[i].yearlyIncome) {
-                cout << RED << "$" << economyHistory[i].yearlyExpenses << RESET << "  |  ";
-            } else {
-                cout << "$" << economyHistory[i].yearlyExpenses << "  |  ";
-            }
+            // Display the row with aligned columns
+            std::cout << "\033[" << row << ";" << menuCol << "H"
+                      << setw(yearWidth) << left << year << " | "
+                      << setw(fundsWidth) << left << funds << " | "
+                      << incomeColor << setw(incomeWidth) << left << income << RESET << " | "
+                      << expenseColor << setw(expensesWidth) << left << expenses << RESET << " | "
+                      << setw(comWidth) << left << commercial << " | "
+                      << setw(indWidth) << left << industrial;
             
-            cout << economyHistory[i].commercialCount << "  |  ";
-            cout << economyHistory[i].industrialCount << endl;
+            row++;
+            
+            // Limit display to 5 rows to prevent overflow
+            if (row > displayRow + 9) break;
         }
     }
     
@@ -2672,102 +2841,107 @@ void display_EconomyStats() {
             growth = economyHistory[latest].funds - economyHistory[latest-1].funds;
         }
         
-        cout << endl << BOLD << "SUMMARY:" << RESET << endl;
-        cout << "Current Funds: $" << economyHistory[latest].funds << endl;
-        
-        if (growth >= 0) {
-            cout << "Last Year Growth: " << GREEN << "+" << growth << RESET << endl;
-        } else {
-            cout << "Last Year Growth: " << RED << growth << RESET << endl;
-        }
-        
-        cout << "Commercial:Industrial Ratio: " 
-             << economyHistory[latest].commercialCount << ":" 
-             << economyHistory[latest].industrialCount << endl;
+        std::cout << "\033[" << (row + 1) << ";" << menuCol << "H" << BOLD << "SUMMARY:" << RESET;
+        std::cout << "\033[" << (row + 2) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Current Funds:" << "$" << economyHistory[latest].funds;
+        std::cout << "\033[" << (row + 3) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Last Year Growth:" << (growth >= 0 ? GREEN : RED) 
+                  << (growth >= 0 ? "+" : "") << growth << RESET;
+        std::cout << "\033[" << (row + 4) << ";" << menuCol << "H"
+                  << setw(20) << left << "Com:Ind Ratio:" 
+                  << economyHistory[latest].commercialCount << ":" 
+                  << economyHistory[latest].industrialCount;
     }
     
-    // Add instructions to return
-    cout << endl << BOLD << "Press any key to return to menu" << RESET << endl;
     
     // Ensure output is flushed to display
-    cout.flush();
+    std::cout.flush();
     
     // Wait for key press
     _getch();
     
-    // Return to the main menu
-    // We'll let the main menu redraw everything when we exit
+    // Redraw the main interface
+    clear_MenuArea();
+    draw_Menu();
+    draw_Stats();
 }
 
 // Function to display Environment Statistics
 void display_EnvironmentStats() {
-    // Clear the entire screen
-    system("cls");
+    const int statsWidth = 70;
     
-    // Print debug info at the top of the screen
-    cout << "ENVIRONMENT STATS DEBUG INFO:" << endl;
-    cout << "Number of records: " << environmentHistory.size() << endl;
-    cout << "Current Year: " << currentYear << endl;
-    cout << "Current Pollution: " << pollution << "%" << endl << endl;
+    // Clear any previous messages and menus
+    clear_MenuArea();
+    display_MessageBar("", "");
     
-    // Display title with bold green color
-    cout << BOLD << B_GREEN << "ENVIRONMENT STATISTICS" << RESET << endl << endl;
+    // Calculate display row to ensure it's visible
+    const int displayRow = menuRow + 3;
     
-    // Display column headers
-    cout << BOLD << "Year  |  Pollution  |  Temperature  |  Forest  |  Sea Level" << RESET << endl;
-    cout << "-------------------------------------------------------------" << endl;
+    // Display title
+    std::cout << "\033[" << displayRow << ";" << menuCol << "H" << BOLD << B_GREEN << "ENVIRONMENT STATISTICS" << RESET;
+    
+    // Display record count
+    std::cout << "\033[" << (displayRow + 1) << ";" << menuCol << "H" 
+              << "Records: " << environmentHistory.size();
+    
+    // Define column widths for consistent alignment
+    const int yearWidth = 6;
+    const int pollutionWidth = 10;
+    const int tempWidth = 8;
+    const int forestWidth = 8;
+    const int seaLevelWidth = 10;
+    
+    // Display header with aligned columns
+    std::cout << "\033[" << (displayRow + 2) << ";" << menuCol << "H" 
+              << BOLD << setw(yearWidth) << left << "Year" << RESET << " | " 
+              << BOLD << setw(pollutionWidth) << left << "Pollution" << RESET << " | " 
+              << BOLD << setw(tempWidth) << left << "Temp." << RESET << " | " 
+              << BOLD << setw(forestWidth) << left << "Forest" << RESET << " | " 
+              << BOLD << setw(seaLevelWidth) << left << "Sea Level" << RESET;
+    
+    // Display horizontal line
+    std::cout << "\033[" << (displayRow + 3) << ";" << menuCol << "H" << string(statsWidth, '-');
     
     // Display historical data (most recent at the top)
+    int row = displayRow + 4;
     if (environmentHistory.empty()) {
-        cout << "No environmental data available yet." << endl;
+        std::cout << "\033[" << row << ";" << menuCol << "H" << "No environmental data available yet.";
+        row++;
     } else {
-        for (int i = environmentHistory.size() - 1; i >= 0 && i >= (int)environmentHistory.size() - 5; i--) {
-            // Year
-            cout << environmentHistory[i].year << "  |  ";
+        for (int i = environmentHistory.size() - 1; i >= 0; i--) {
+            // Format each data point
+            string year = to_string(environmentHistory[i].year);
+            string pollutionStr = to_string(environmentHistory[i].pollution) + "%";
+            string tempStr = to_string(environmentHistory[i].temperature) + "°C";
+            string forestStr = to_string(environmentHistory[i].forestCoverage) + "%";
+            string seaLevelStr = to_string(environmentHistory[i].seaLevel) + "%";
             
-            // Pollution with color coding
-            if (environmentHistory[i].pollution > 70) {
-                cout << RED;
-            } else if (environmentHistory[i].pollution > 40) {
-                cout << YELLOW;
-            } else {
-                cout << GREEN;
-            }
-            cout << environmentHistory[i].pollution << "%" << RESET << "  |  ";
+            // Color code based on severity
+            string pollutionColor = (environmentHistory[i].pollution > 70) ? RED : 
+                                   (environmentHistory[i].pollution > 40) ? YELLOW : GREEN;
+            string tempColor = (environmentHistory[i].temperature > 30) ? RED : 
+                              (environmentHistory[i].temperature > 25) ? YELLOW : GREEN;
+            string forestColor = (environmentHistory[i].forestCoverage < 30) ? RED : 
+                                (environmentHistory[i].forestCoverage < 50) ? YELLOW : GREEN;
+            string seaLevelColor = (environmentHistory[i].seaLevel > 50) ? RED : 
+                                  (environmentHistory[i].seaLevel > 30) ? YELLOW : GREEN;
             
-            // Temperature with color coding
-            if (environmentHistory[i].temperature > 30) {
-                cout << RED;
-            } else if (environmentHistory[i].temperature > 25) {
-                cout << YELLOW;
-            } else {
-                cout << GREEN;
-            }
-            cout << environmentHistory[i].temperature << "°C" << RESET << "  |  ";
+            // Display the row with aligned columns
+            std::cout << "\033[" << row << ";" << menuCol << "H"
+                      << setw(yearWidth) << left << year << " | "
+                      << pollutionColor << setw(pollutionWidth) << left << pollutionStr << RESET << " | "
+                      << tempColor << setw(tempWidth) << left << tempStr << RESET << " | "
+                      << forestColor << setw(forestWidth) << left << forestStr << RESET << " | "
+                      << seaLevelColor << setw(seaLevelWidth) << left << seaLevelStr << RESET;
             
-            // Forest coverage with color coding
-            if (environmentHistory[i].forestCoverage < 30) {
-                cout << RED;
-            } else if (environmentHistory[i].forestCoverage < 50) {
-                cout << YELLOW;
-            } else {
-                cout << GREEN;
-            }
-            cout << environmentHistory[i].forestCoverage << "%" << RESET << "  |  ";
+            row++;
             
-            // Sea level with color coding
-            if (environmentHistory[i].seaLevel > 50) {
-                cout << RED;
-            } else if (environmentHistory[i].seaLevel > 30) {
-                cout << YELLOW;
-            } else {
-                cout << GREEN;
-            }
-            cout << environmentHistory[i].seaLevel << "%" << RESET << endl;
+            // Limit display to 5 rows to prevent overflow
+            if (row > displayRow + 9) break;
         }
     }
     
-    // Display environmental assessment
+    // Display environmental risk assessment
     if (!environmentHistory.empty()) {
         int latest = environmentHistory.size() - 1;
         
@@ -2797,87 +2971,114 @@ void display_EnvironmentStats() {
             riskColor = RED;
         }
         
-        cout << endl << BOLD << "ENVIRONMENTAL ASSESSMENT:" << RESET << endl;
-        cout << "Risk Score: " << riskColor << riskScore << "/100" << RESET << endl;
-        cout << "Status: " << riskColor << riskCategory << RESET << endl;
+        std::cout << "\033[" << (row + 1) << ";" << menuCol << "H" << BOLD << "ENVIRONMENTAL ASSESSMENT:" << RESET;
+        std::cout << "\033[" << (row + 2) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Risk Score:" << riskColor << riskScore << "/100" << RESET;
+        std::cout << "\033[" << (row + 3) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Status:" << riskColor << riskCategory << RESET;
         
         // Add specific warnings
         if (environmentHistory[latest].pollution > 70) {
-            cout << RED << "⚠ High pollution levels causing health issues" << RESET << endl;
+            std::cout << "\033[" << (row + 4) << ";" << menuCol << "H" 
+                      << RED << "⚠ High pollution levels causing health issues" << RESET;
         }
         if (environmentHistory[latest].temperature > 30) {
-            cout << RED << "⚠ Rising temperatures causing sea level increase" << RESET << endl;
+            std::cout << "\033[" << (row + 5) << ";" << menuCol << "H" 
+                      << RED << "⚠ Rising temperatures causing sea level increase" << RESET;
         }
         if (environmentHistory[latest].forestCoverage < 30) {
-            cout << RED << "⚠ Low forest coverage reducing quality of life" << RESET << endl;
+            std::cout << "\033[" << (row + 6) << ";" << menuCol << "H" 
+                      << RED << "⚠ Low forest coverage reducing quality of life" << RESET;
         }
     }
     
-    // Add instructions to return
-    cout << endl << BOLD << "Press any key to return to menu" << RESET << endl;
+    
+    // Ensure output is flushed to display
+    std::cout.flush();
     
     // Wait for key press
     _getch();
     
-    // Return to the main menu
-    // We'll let the main menu redraw everything when we exit
+    // Redraw the main interface
+    clear_MenuArea();
+    draw_Menu();
+    draw_Stats();
 }
 
 // Function to display Population Statistics
 void display_PopulationStats() {
-    // Clear the entire screen
-    system("cls");
+    const int statsWidth = 70;
     
-    // Print debug info at the top of the screen
-    cout << "POPULATION STATS DEBUG INFO:" << endl;
-    cout << "Number of records: " << populationHistory.size() << endl;
-    cout << "Current Year: " << currentYear << endl;
-    cout << "Current Population: " << population << endl;
-    cout << "Current Happiness: " << happiness << "%" << endl << endl;
+    // Clear any previous messages and menus
+    clear_MenuArea();
+    display_MessageBar("", "");
     
-    // Display title with bold blue color
-    cout << BOLD << B_BLUE << "POPULATION STATISTICS" << RESET << endl << endl;
+    // Calculate display row to ensure it's visible
+    const int displayRow = menuRow + 3;
     
-    // Display column headers
-    cout << BOLD << "Year  |  Population  |  Happiness  |  Housing  |  Power Use" << RESET << endl;
-    cout << "--------------------------------------------------------------" << endl;
+    // Display title
+    std::cout << "\033[" << displayRow << ";" << menuCol << "H" << BOLD << B_BLUE << "POPULATION STATISTICS" << RESET;
+    
+    // Display record count
+    std::cout << "\033[" << (displayRow + 1) << ";" << menuCol << "H" 
+              << "Records: " << populationHistory.size();
+    
+    // Define column widths for consistent alignment
+    const int yearWidth = 6;
+    const int popWidth = 12;
+    const int happinessWidth = 10;
+    const int housingWidth = 8;
+    const int powerWidth = 10;
+    
+    // Display header with aligned columns
+    std::cout << "\033[" << (displayRow + 2) << ";" << menuCol << "H" 
+              << BOLD << setw(yearWidth) << left << "Year" << RESET << " | " 
+              << BOLD << setw(popWidth) << left << "Population" << RESET << " | " 
+              << BOLD << setw(happinessWidth) << left << "Happiness" << RESET << " | " 
+              << BOLD << setw(housingWidth) << left << "Housing" << RESET << " | " 
+              << BOLD << setw(powerWidth) << left << "Power Use" << RESET;
+    
+    // Display horizontal line
+    std::cout << "\033[" << (displayRow + 3) << ";" << menuCol << "H" << string(statsWidth, '-');
     
     // Display historical data (most recent at the top)
+    int row = displayRow + 4;
     if (populationHistory.empty()) {
-        cout << "No population data available yet." << endl;
+        std::cout << "\033[" << row << ";" << menuCol << "H" << "No population data available yet.";
+        row++;
     } else {
-        for (int i = populationHistory.size() - 1; i >= 0 && i >= (int)populationHistory.size() - 5; i--) {
-            // Year
-            cout << populationHistory[i].year << "  |  ";
+        for (int i = populationHistory.size() - 1; i >= 0; i--) {
+            // Format each data point
+            string year = to_string(populationHistory[i].year);
+            string popStr = to_string(populationHistory[i].population);
+            string happinessStr = to_string(populationHistory[i].happiness) + "%";
+            string housingStr = to_string(populationHistory[i].residentialCount);
+            string powerStr = to_string(populationHistory[i].powerConsumption) + " MW";
             
-            // Population
-            cout << populationHistory[i].population << "  |  ";
+            // Color code based on metrics
+            string happinessColor = (populationHistory[i].happiness > 75) ? GREEN : 
+                                   (populationHistory[i].happiness > 50) ? YELLOW : RED;
             
-            // Happiness with color coding
-            if (populationHistory[i].happiness > 75) {
-                cout << GREEN;
-            } else if (populationHistory[i].happiness > 50) {
-                cout << YELLOW;
-            } else {
-                cout << RED;
-            }
-            cout << populationHistory[i].happiness << "%" << RESET << "  |  ";
-            
-            // Housing with color coding (red if over capacity)
+            // Housing capacity (each house = 50 people)
             int housingCapacity = populationHistory[i].residentialCount * 50;
-            if (populationHistory[i].population > housingCapacity && housingCapacity > 0) {
-                cout << RED;
-            } else {
-                cout << GREEN;
-            }
-            cout << populationHistory[i].residentialCount << RESET << "  |  ";
+            string housingColor = (populationHistory[i].population > housingCapacity) ? RED : GREEN;
             
-            // Power consumption
-            cout << populationHistory[i].powerConsumption << " MW" << endl;
+            // Display the row with aligned columns
+            std::cout << "\033[" << row << ";" << menuCol << "H"
+                      << setw(yearWidth) << left << year << " | "
+                      << setw(popWidth) << left << popStr << " | "
+                      << happinessColor << setw(happinessWidth) << left << happinessStr << RESET << " | "
+                      << housingColor << setw(housingWidth) << left << housingStr << RESET << " | "
+                      << setw(powerWidth) << left << powerStr;
+            
+            row++;
+            
+            // Limit display to 5 rows to prevent overflow
+            if (row > displayRow + 9) break;
         }
     }
     
-    // Display population trends
+    // Display population trends and statistics
     if (!populationHistory.empty() && populationHistory.size() > 1) {
         int latest = populationHistory.size() - 1;
         int popGrowth = populationHistory[latest].population - populationHistory[latest-1].population;
@@ -2889,202 +3090,66 @@ void display_PopulationStats() {
         int housingUtilization = (housingCapacity > 0) ? 
                                (populationHistory[latest].population * 100) / housingCapacity : 100;
         
-        // Power capacity (estimate)
-        int powerPlants = max(1, (populationHistory[latest].powerConsumption + 199) / 200);
+        int powerPlants = 0;
+        
+        int estimatedPowerPlants = (populationHistory[latest].powerConsumption + 199) / 200;
+        // Or use a fixed ratio based on population (1 plant per 1000 people)
+        powerPlants = max(1, estimatedPowerPlants);
+        
         int powerCapacity = powerPlants * 200;
         int powerUtilization = (powerCapacity > 0) ?
                              (populationHistory[latest].powerConsumption * 100) / powerCapacity : 100;
         
-        cout << endl << BOLD << "POPULATION TRENDS:" << RESET << endl;
-        cout << "Current Population: " << populationHistory[latest].population << endl;
-        cout << "Growth: ";
-        if (popGrowth >= 0) {
-            cout << "+" << popGrowth;
-        } else {
-            cout << popGrowth;
-        }
-        cout << " (" << (popGrowthPercent >= 0 ? "+" : "") << popGrowthPercent << "%)" << endl;
+        std::cout << "\033[" << (row + 1) << ";" << menuCol << "H" << BOLD << "POPULATION TRENDS:" << RESET;
+        std::cout << "\033[" << (row + 2) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Current Population:" << populationHistory[latest].population;
+        std::cout << "\033[" << (row + 3) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Growth:" << (popGrowth >= 0 ? "+" : "") << popGrowth 
+                  << " (" << (popGrowthPercent >= 0 ? "+" : "") << popGrowthPercent << "%)";
         
         // Housing assessment
-        cout << "Housing Capacity: " << housingCapacity << " - Utilization: ";
-        if (housingUtilization > 100) {
-            cout << RED;
-        } else {
-            cout << GREEN;
-        }
-        cout << housingUtilization << "%" << RESET << endl;
+        std::cout << "\033[" << (row + 4) << ";" << menuCol << "H"
+                  << setw(20) << left << "Housing Capacity:" << housingCapacity 
+                  << " - Utilization: " << (housingUtilization > 100 ? RED : GREEN) 
+                  << housingUtilization << "%" << RESET;
         
         // Power assessment
-        cout << "Power Capacity: " << powerCapacity << " MW - Utilization: ";
-        if (powerUtilization > 90) {
-            cout << RED;
-        } else {
-            cout << GREEN;
-        }
-        cout << powerUtilization << "%" << RESET << endl;
+        std::cout << "\033[" << (row + 5) << ";" << menuCol << "H"
+                  << setw(20) << left << "Power Capacity:" << powerCapacity << " MW"
+                  << " - Utilization: " << (powerUtilization > 90 ? RED : GREEN) 
+                  << powerUtilization << "%" << RESET;
         
         // Happiness assessment
-        cout << "Happiness Level: ";
-        if (populationHistory[latest].happiness > 75) {
-            cout << GREEN;
-        } else if (populationHistory[latest].happiness > 50) {
-            cout << YELLOW;
-        } else {
-            cout << RED;
-        }
-        cout << populationHistory[latest].happiness << "%" << RESET << endl;
-        
+        std::cout << "\033[" << (row + 6) << ";" << menuCol << "H"
+                  << setw(20) << left << "Happiness Level:"
+                  << (populationHistory[latest].happiness > 75 ? GREEN : 
+                     populationHistory[latest].happiness > 50 ? YELLOW : RED)
+                  << populationHistory[latest].happiness << "%" << RESET;
     } else if (!populationHistory.empty()) {
-        // Just display current stats if only one record
+        // Special case for just one record
         int latest = populationHistory.size() - 1;
-        cout << endl << BOLD << "POPULATION SUMMARY:" << RESET << endl;
-        cout << "Current Population: " << populationHistory[latest].population << endl;
         
-        // Happiness assessment
-        cout << "Happiness Level: ";
-        if (populationHistory[latest].happiness > 75) {
-            cout << GREEN;
-        } else if (populationHistory[latest].happiness > 50) {
-            cout << YELLOW;
-        } else {
-            cout << RED;
-        }
-        cout << populationHistory[latest].happiness << "%" << RESET << endl;
+        std::cout << "\033[" << (row + 1) << ";" << menuCol << "H" << BOLD << "POPULATION SUMMARY:" << RESET;
+        std::cout << "\033[" << (row + 2) << ";" << menuCol << "H" 
+                  << setw(20) << left << "Current Population:" << populationHistory[latest].population;
     }
     
     // Add instructions to return
-    cout << endl << BOLD << "Press any key to return to menu" << RESET << endl;
+    
+    // Ensure output is flushed to display
+    std::cout.flush();
     
     // Wait for key press
     _getch();
     
-    // Return to the main menu
-    // We'll let the main menu redraw everything when we exit
-}
-
-// Apply customization settings
-void applyCustomSettings()
-{
-    // ... existing code ...
-}
-
-// Function to check if a map coordinate is in a specific layer from the border
-// Layer 1 = outermost layer, Layer 2 = second layer, etc.
-bool isMapCoordInLayer(int row, int col, int layer) {
-    // Check if we're in the specified layer from any edge
-    bool isInLayer = 
-        row == layer - 1 ||                  // Top edge
-        row == map_height - layer ||         // Bottom edge
-        col == layer - 1 ||                  // Left edge
-        col == map_width - layer;            // Right edge
-        
-    return isInLayer;
-}
-
-// Flood a specific layer of the map
-void floodMapLayer(tile map[map_height][map_width], int layer) {
-    // Ensure layer is valid
-    if (layer <= 0 || layer > min(map_height/2, map_width/2)) {
-        return;
-    }
-    
-    int destroyedBuildings = 0;
-    int flooded_tiles = 0;
-    
-    // Loop through all map tiles
-    for (int i = 0; i < map_height; i++) {
-        for (int j = 0; j < map_width; j++) {
-            // Check if this tile is in the right layer from the edge
-            if (isMapCoordInLayer(i, j, layer)) {
-                // Only convert land to water (don't affect existing water)
-                if (map[i][j].type == "Land") {
-                    // Check for buildings and destroy them
-                    if (map[i][j].hasBuilding) {
-                        // Count destroyed buildings
-                        destroyedBuildings++;
-                        
-                        // Reduce happiness and population if residential buildings are destroyed
-                        if (map[i][j].building == "Residential") {
-                            population = max(0, population - economy.populationPerHouse);
-                            happiness = max(0, happiness - 3);
-                        }
-                        
-                        // Clear the building
-                        map[i][j].hasBuilding = false;
-                        map[i][j].building = "";
-                    }
-                    
-                    // Convert to water
-                    map[i][j].type = "Water";
-                    map[i][j].colour = custom_Background(visual.colors.waterBackground.r, 
-                                                        visual.colors.waterBackground.g, 
-                                                        visual.colors.waterBackground.b) + 
-                                      custom_Colour(visual.colors.waterForeground.r, 
-                                                   visual.colors.waterForeground.g, 
-                                                   visual.colors.waterForeground.b);
-                    map[i][j].texture = "~ ";
-                    
-                    flooded_tiles++;
-                }
-            }
-        }
-    }
-    
-    // If buildings were destroyed, show a message
-    if (destroyedBuildings > 0) {
-        string floodMessage = "FLOOD ALERT: Rising water levels have destroyed " + to_string(destroyedBuildings) + " buildings!";
-        draw_Message(floodMessage);
-    } else if (flooded_tiles > 0) {
-        draw_Message("FLOOD ALERT: Water levels have risen, flooding " + to_string(flooded_tiles) + " land tiles!");
-    }
-    
-    // Update the current flood layer
-    visual.flood.currentFloodLayer = layer;
-}
-
-// Check if flooding should occur based on temperature
-void checkForFlooding(tile map[map_height][map_width]) {
-    // Only process if flooding is enabled
-    if (!visual.flood.floodingEnabled) {
-        return;
-    }
-    
-    // Check for flood warning first
-    if (!visual.flood.floodWarningIssued && temperature >= visual.flood.floodWarningThreshold) {
-        draw_Message("⚠️ WARNING: Rising temperatures may cause flooding soon!");
-        visual.flood.floodWarningIssued = true;
-    }
-    
-    // Check if temperature exceeds the threshold for actual flooding
-    if (temperature >= visual.flood.temperatureThreshold) {
-        // Calculate how many layers to flood based on how far above threshold
-        int layersToFlood = min(
-            visual.flood.outerLayersToFlood,  // Max layers we can flood
-            (temperature - visual.flood.temperatureThreshold) + 1  // +1 ensures at least 1 layer floods at threshold
-        );
-        
-        // Only proceed if we need to flood more than current level
-        if (layersToFlood > visual.flood.currentFloodLayer) {
-            // Flood each layer sequentially
-            for (int layer = visual.flood.currentFloodLayer + 1; layer <= layersToFlood; layer++) {
-                floodMapLayer(map, layer);
-            }
-            
-            // Show different messages based on severity
-            if (layersToFlood == 1) {
-                draw_Message("Rising sea levels have begun to flood coastal areas!");
-            } else if (layersToFlood >= 2) {
-                draw_Message("CRITICAL: Severe flooding is affecting large portions of your city!");
-            }
-            
-            // Update the current flood level
-            visual.flood.currentFloodLayer = layersToFlood;
-        }
-    }
+    // Redraw the main interface
+    clear_MenuArea();
+    draw_Menu();
+    draw_Stats();
 }
 
 void printWelcomeBanner(int spacing = 0) {
-    string fg = custom_Colour(255, 165, 90);    // Soft warm orange
+    string fg = custom_Colour(255, 165, 90);    // Soft warm orange     // Deep slate blue
     string reset = "\033[0m";
 
     string space(spacing, ' ');
@@ -3092,31 +3157,32 @@ void printWelcomeBanner(int spacing = 0) {
     // Apply background only to the ASCII part
     cout << fg;
     cout << space  << R"(                                                                                                             
-                                                                ,--,                                         
-  ,----..                                                     ,--.'|                                         
- /   /   \                                                 ,--,  | :                                         
-|   :     :   __  ,-.                       ,---,       ,---.'|  : '                                  ,---,  
-.   |  ;. / ,' ,'/ /|                   ,-+-. /  |      |   | : _' |               .---.          ,-+-. /  | 
-.   ; /--`  '  | |' | ,---.     ,---.  ,--.'|'   |      :   : |.'  |  ,--.--.    /.  ./|  ,---.  ,--.'|'   | 
-;   | ;  __ |  |   ,'/     \   /     \|   |  ,"' |      |   ' '  ; : /       \ .-' . ' | /     \|   |  ,"' | 
-|   : |.' .''  :  / /    /  | /    /  |   | /  | |      '   |  .'. |.--.  .-. /___/ \: |/    /  |   | /  | | 
-.   | '_.' :|  | ' .    ' / |.    ' / |   | |  | |      |   | :  | ' \__\/: . .   \  ' .    ' / |   | |  | | 
-'   ; : \  |;  : | '   ;   /|'   ;   /|   | |  |/       '   : |  : ; ," .--.; |\   \   '   ;   /|   | |  |/  
-'   | '/  .'|  , ; '   |  / |'   |  / |   | |--'        |   | '  ,/ /  /  ,.  | \   \  '   |  / |   | |--'   
-|   :    /   ---'  |   :    ||   :    |   |/            ;   : ;--' ;  :   .'   \ \   \ |   :    |   |/       
- \   \ .'           \   \  /  \   \  /'---'             |   ,/     |  ,     .-./  '---" \   \  /'---'        
-  `---`              `----'    `----'                   '---'       `--`---'             `----'              
+                                                                  ,--,                                         
+    ,----..                                                     ,--.'|                                         
+   /   /   \                                                 ,--,  | :                                         
+  |   :     :   __  ,-.                       ,---,       ,---.'|  : '                                  ,---,  
+  .   |  ;. / ,' ,'/ /|                   ,-+-. /  |      |   | : _' |               .---.          ,-+-. /  | 
+  .   ; /--`  '  | |' | ,---.     ,---.  ,--.'|'   |      :   : |.'  |  ,--.--.    /.  ./|  ,---.  ,--.'|'   | 
+  ;   | ;  __ |  |   ,'/     \   /     \|   |  ,"' |      |   ' '  ; : /       \ .-' . ' | /     \|   |  ,"' | 
+  |   : |.' .''  :  / /    /  | /    /  |   | /  | |      '   |  .'. |.--.  .-. /___/ \: |/    /  |   | /  | | 
+  .   | '_.' :|  | ' .    ' / |.    ' / |   | |  | |      |   | :  | ' \__\/: . .   \  ' .    ' / |   | |  | | 
+  '   ; : \  |;  : | '   ;   /|'   ;   /|   | |  |/       '   : |  : ; ," .--.; |\   \   '   ;   /|   | |  |/  
+  '   | '/  .'|  , ; '   |  / |'   |  / |   | |--'        |   | '  ,/ /  /  ,.  | \   \  '   |  / |   | |--'   
+  |   :    /   ---'  |   :    ||   :    |   |/            ;   : ;--' ;  :   .'   \ \   \ |   :    |   |/       
+   \   \ .'           \   \  /  \   \  /'---'             |   ,/     |  ,     .-./  '---" \   \  /'---'        
+    `---`              `----'    `----'                   '---'       `--`---'             `----'              
                                                                                                        
 )" << reset << endl;
 
     // Footer text with no background color
     cout << fg;
-    cout << space << "Welcome to Green Haven!\n";
-    cout << space << "You're the proud mayor of an island paradise...\n";
-    cout << space << "Too bad it's one high tide away from becoming Atlantis 2.0!\n";
+    cout << space << "                  Welcome to Green Haven!\n";
+    cout << space << "       You're the proud mayor of an island paradise...\n";
+    cout << space << "  Too bad it's one high tide away from becoming Atlantis 2.0!\n";
     cout << space << "Build wind turbines, plant forests, compost citizen complaints,\n";
-    cout << space << "and fight climate chaos one eco-policy at a time.\n";
-    cout << space << "Remember: floods don't take bribes. 🌊🏝️\n";
+    cout << space << "       and fight climate chaos one eco-policy at a time.\n";
+    cout << space << "            Remember: floods don't take bribes. \n\n";
+    cout << BOLD << space << "                  PRESS ANY KEY TO START";
     cout << reset;
 }
 
@@ -3125,11 +3191,14 @@ int main()
     system(""); // For proper working of ANSI codes (Text Style and Colours)
 
     
-    // Call functions with clear qualification to avoid scope issues
     ::emoji_Support(); // For making Emojis work in CMD
     srand(time(0));    // Seed for Random Island Generation
     
+    printWelcomeBanner(25);
+
     cin.get();
+    system("cls");
+    ::emoji_Support();
 
     // Apply customization settings
     ::applyCustomSettings();
@@ -3172,35 +3241,18 @@ int main()
             []() { startResearch(2); }, // Sustainable City
         }},
         {"STATS", {"Economy", "Environment", "Population"}, {
-            [&map]() { 
-                display_EconomyStats(); 
-                system("cls");
-                display_Map(map);
-                draw_Menu();
-                draw_Stats();
-            },
-            [&map]() { 
-                display_EnvironmentStats();
-                system("cls");
-                display_Map(map);
-                draw_Menu();
-                draw_Stats();
-            },
-            [&map]() { 
-                display_PopulationStats();
-                system("cls");
-                display_Map(map);
-                draw_Menu();
-                draw_Stats();
-            }
+            []() { display_EconomyStats(); },
+            []() { display_EnvironmentStats(); },
+            []() { display_PopulationStats(); }
         }}};
 
+    updateUpgradesMenu();
     rebuild_TabPositions();
     compute_UI_positions();
 
     draw_Menu();
     draw_Stats();
-    // Initialize tooltips with a random tip
+
     enable_Tooltips();
     handle_Input(map);
 
