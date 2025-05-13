@@ -1,6 +1,14 @@
-# 🌱 Smart Eco City Simulation (CLI Game)
+<h1 align="center">🌱 Smart Eco City Simulation 🌆</h1>
+<p align="center">
+  A colorful and feature-rich command-line city simulation game built in C++ that challenges players to manage a futuristic eco-city. Designed for immersive gameplay using emoji-based graphics, real-time stats, dynamic menus, and a smart upgrade/research system.
+</p>
 
-A colorful and feature-rich command-line city simulation game built in **C++** that challenges players to manage a futuristic eco-city. Designed for immersive gameplay using emoji-based graphics, real-time stats, dynamic menus, and a smart upgrade/research system.
+<p align="center">
+  <img src="https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/Platform-Windows-informational?style=flat-square" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+  <img src="https://img.shields.io/badge/UI-Emoji%20%26%20Colorful%20CLI-purple?style=flat-square" />
+</p>
 
 > 🛠 Created as a second-semester course project to demonstrate real-time simulation, visual CLI interfaces, sustainable development mechanics, and upgrade-based strategy.
 
@@ -22,37 +30,6 @@ project_main.cpp         → All logic and simulation code
 SmartCity_Questions.txt  → (Optional) Quiz questions for Smart City research
 GreenCity_Questions.txt  → (Optional) Quiz questions for Green City research
 SustainableCity_Questions.txt → (Optional) For advanced tech research
-```
-+------------------+
-|  Main Loop       |
-|  handle_Input()  |
-+--------+---------+
-         |
-         v
-+--------+---------+
-| UI Menu System   |<---------+
-+--------+---------+          |
-         |                    |
-         v                    |
-+--------+---------+   +------+--------+
-| Build/Remove Mode|   | Research &    |
-+--------+---------+   | Upgrades      |
-         |             +------+--------+
-         v                    |
-+--------+---------+          |
-| Map Management   |          |
-+--------+---------+          |
-         |                    |
-         v                    |
-+--------+---------+          |
-| Game State Engine|<---------+
-+--------+---------+
-         |
-         v
-+------------------+
-| Visual Output    |
-+------------------+
-
 ---
 
 ## 🔧 Technologies Used
