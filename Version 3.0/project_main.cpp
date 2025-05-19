@@ -234,6 +234,7 @@ struct tile
     string texture, colour, type;
     string building; 
     bool hasBuilding; 
+    
 };
 
 // Forward declarations
