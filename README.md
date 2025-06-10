@@ -27,10 +27,13 @@
 ## 📁 Project Structure
 
 project_main.cpp         → All logic and simulation code
+
 SmartCity_Questions.txt  → (Optional) Quiz questions for Smart City research
+
 GreenCity_Questions.txt  → (Optional) Quiz questions for Green City research
+
 SustainableCity_Questions.txt → (Optional) For advanced tech research
----
+
 
 ## 🔧 Technologies Used
 
